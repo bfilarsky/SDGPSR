@@ -3,8 +3,8 @@ This is not intended for actual use in any application, it was written for my ow
 
 ### Major items that still need to be implemented:
 
-*Satellite Errors (clock, relativistic, etc)
-*Sagnac effect
-*Code cleanup from original development
-*Makefile for shared library
-*Writeup of the process and results
+* Satellite Errors (clock, relativistic, etc)
+* Sagnac effect
+* Code cleanup from original development
+* Makefile for shared library
+* Writeup of the process and results
