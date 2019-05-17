@@ -8,16 +8,16 @@ The receiver conducts the following steps in order:
   * Each signal tracker attempts to lock onto the signal
   * Once one signal tracker obtains the full track state, the others are removed
 4. The signal tracker proceeds through 4 states in order to get a signal lock
-  1. It starts with 1 ms integration intervals and attempts to get a frequency lock on the carrier
-  2. Once a frequency lock is completed, it attempts to get a phase lock on the carrier
-  3. Once carrier phase lock is completed, it starts looking for nav bit edges. These are where the carrier changes phase by 180 degrees.
-  4. Once the nav bit edges are found, it starts demodulating the nav bits
+  * It starts with 1 ms integration intervals and attempts to get a frequency lock on the carrier
+  * Once a frequency lock is completed, it attempts to get a phase lock on the carrier
+  * Once carrier phase lock is completed, it starts looking for nav bit edges. These are where the carrier changes phase by 180 degrees.
+  * Once the nav bit edges are found, it starts demodulating the nav bits
 5. The LNAV data is demodulated. 
-  1. In order to find where we are in a subframe, we search for the preamble on word 1. If the preamble is found (or its inverse, indicating we have locked phase 180 off), an attempt to validate the word with its checksum is made. 
-  2. If this is successfull, a new subframe demodulation is started. 
-  3. If the nav bits are found to be flipped, a flag is returned to flip the phase on the signal tracker.
-  4. Time of week is determined from any subframe
-  5. Subframes 1-3 are demodulated, and the values populated in structures for clock data and ephemeris data. Subframes 4 & 5, which contain the Almanac and other less essential information are ignored
+  * In order to find where we are in a subframe, we search for the preamble on word 1. If the preamble is found (or its inverse, indicating we have locked phase 180 off), an attempt to validate the word with its checksum is made. 
+  * If this is successfull, a new subframe demodulation is started. 
+  * If the nav bits are found to be flipped, a flag is returned to flip the phase on the signal tracker.
+  * Time of week is determined from any subframe
+  * Subframes 1-3 are demodulated, and the values populated in structures for clock data and ephemeris data. Subframes 4 & 5, which contain the Almanac and other less essential information are ignored
 6. The clock and ephemeris data is used to determine the position of the satellite in the ECEF frame
 7. The satellite positions and time of arrival of each signal is used to compute the user time & position using least squares
 
