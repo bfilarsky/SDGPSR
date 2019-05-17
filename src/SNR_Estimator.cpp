@@ -1,10 +1,3 @@
-/*
- * SNR_Estimator.cpp
- *
- *  Created on: Apr 7, 2019
- *      Author: bfilarsky
- */
-
 #include "SNR_Estimator.h"
 
 SNR_Estimator::SNR_Estimator() {

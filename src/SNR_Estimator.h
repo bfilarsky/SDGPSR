@@ -1,10 +1,3 @@
-/*
- * CNoEstimator.h
- *
- *  Created on: Apr 7, 2019
- *      Author: bfilarsky
- */
-
 #ifndef SRC_SNRESTIMATOR_H_
 #define SRC_SNRESTIMATOR_H_
 

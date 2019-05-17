@@ -1,10 +1,3 @@
-/*
- * CodeLockDetector.h
- *
- *  Created on: Apr 8, 2019
- *      Author: bfilarsky
- */
-
 #ifndef SRC_CODELOCKDETECTOR_H_
 #define SRC_CODELOCKDETECTOR_H_
 

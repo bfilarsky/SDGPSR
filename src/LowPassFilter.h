@@ -1,10 +1,3 @@
-/*
- * LowPassFilter.h
- *
- *  Created on: Apr 7, 2019
- *      Author: bfilarsky
- */
-
 #ifndef SRC_LOWPASSFILTER_H_
 #define SRC_LOWPASSFILTER_H_
 

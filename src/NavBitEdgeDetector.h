@@ -1,10 +1,3 @@
-/*
- * NavBitEdgeDetector.h
- *
- *  Created on: Apr 7, 2019
- *      Author: bfilarsky
- */
-
 #ifndef SRC_NAVBITEDGEDETECTOR_H_
 #define SRC_NAVBITEDGEDETECTOR_H_
 

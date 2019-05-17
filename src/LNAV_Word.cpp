@@ -1,10 +1,3 @@
-/*
- * LNAVWord.cpp
- *
- *  Created on: Mar 16, 2019
- *      Author: bfilarsky
- */
-
 #include "LNAV_Word.h"
 
 LNAV_Word::LNAV_Word(const deque<int> &word, unsigned lastWordBit29, unsigned lastWordBit30, bool inverted) {

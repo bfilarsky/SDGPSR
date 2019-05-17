@@ -1,10 +1,3 @@
-/*
- * LNAVWord.h
- *
- *  Created on: Mar 16, 2019
- *      Author: bfilarsky
- */
-
 #ifndef LNAV_WORD_H_
 #define LNAV_WORD_H_
 

@@ -1,10 +1,3 @@
-/*
- * CaCode.cpp
- *
- *  Created on: Feb 9, 2019
- *      Author: bfilarsky
- */
-
 #include "CaCode.h"
 
 CaCode::CaCode(unsigned prn) {

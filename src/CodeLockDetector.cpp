@@ -1,10 +1,3 @@
-/*
- * CodeLockDetector.cpp
- *
- *  Created on: Apr 8, 2019
- *      Author: bfilarsky
- */
-
 #include "CodeLockDetector.h"
 
 const double K1 = 0.0247;
