@@ -1,4 +1,4 @@
-SDGPSR is a project to use a Software-Defined Radio and PC as a GPS Receiver. The codebase leverages both *Understanding GPS: Principles and Applications* as well as IS-GPS-200J.
+SDGPSR is a project to use a Software-Defined Radio and PC as a GPS Receiver. The codebase leverages *Understanding GPS: Principles and Applications, Kaplan and Hegarty* as well as IS-GPS-200J.
 
 ### Implementation
 The receiver conducts the following steps in order:
