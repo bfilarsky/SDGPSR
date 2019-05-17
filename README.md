@@ -1,8 +1,8 @@
 SDGPSR is a project to use a Software-Defined Radio and PC as a GPS Receiver. The codebase leverages *Understanding GPS: Principles and Applications, Kaplan and Hegarty* as well as IS-GPS-200J.
 
 ### Implementation
-The receiver conducts the following steps in order:
-1. Search the sky for all 32 GPS Satellites. A 2-dimensional search grid is created over code-phase and frequency offset, with a 10 KHz search window and 500 Hz increments. For each frequency, a circular correlation function is computed in the frequency domain, and the results are non-coherently integrated across 128 ms.
+The receiver takes in data at 1 ms intervals (the length of the C/A sequence), and conducts the following steps in order:
+1. Search the sky for all 32 GPS Satellites. A 2-dimensional search grid is created over code-phase and frequency offset, with a 10 KHz search window and 500 Hz increments. For each frequency, a circular correlation function is computed in the frequency domain, and the results are non-coherently integrated in 1 ms intervals across 128 ms.
 2. A satellite is considered found if the value of one of the search bins is at least 10x the standard deviation of all of the search bins. 
 3. For each satellite that is found, a tracking channel is created. Each tracking channel is initialized with multiple signal trackers, all with different frequency offsets. 
   * Each signal tracker attempts to lock onto the signal
