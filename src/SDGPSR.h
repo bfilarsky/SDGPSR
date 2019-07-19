@@ -12,6 +12,7 @@
 #include <fftw3.h>
 #include <list>
 #include <eigen3/Eigen/Dense>
+#include <atomic>
 #include "CaCode.h"
 #include "FFT.h"
 #include "TrackingChannel.h"
@@ -25,18 +26,19 @@ using Eigen::Vector4d;
 
 const uint64_t GPS_L1_HZ = 1575420000;
 const double SAT_FOUND_THRESH = 10.0;
-const double SDR_CLOCK_ERROR = -10e3;
 const double SPEED_OF_LIGHT_MPS = 299792458;
 
 class SDGPSR {
 public:
-	SDGPSR(double fs);
+	SDGPSR(double fs, double clockOffset);
 
 	virtual ~SDGPSR();
 
 	void basebandSignal(fftwVector &data);
 
-	//private:
+	void join(void);
+
+private:
 	void solve(void);
 
 	void signalProcessing();
@@ -64,11 +66,13 @@ public:
 
 	FFT fft_;
 
-	bool run_;
+	atomic_bool run_;
 
 	std::list<TrackingChannel*> channels_;
 
-	//std::thread signalProcessor_;
+	double clockOffset_;
+
+	std::thread signalProcessor_;
 };
 
 #endif /* SRC_SDGPSR_H_ */

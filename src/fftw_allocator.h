@@ -7,9 +7,6 @@ template<typename T>
 class fftw_allocator{
 public:
 	using value_type = T;
-	//fftw_allocator() = default;
-
-	//template<typename U> constexpr fftw_allocator(const fftw_allocator<U>&) noexcept {}
 
 	value_type* allocate(std::size_t n){
 		return reinterpret_cast<value_type*>(fftw_malloc(n * sizeof(T)));
