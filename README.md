@@ -30,4 +30,4 @@ The receiver takes in data at 1 ms intervals (the length of the C/A sequence), a
 * Satellite velocity
 * Mapping Doppler Measurements to Satellite Velocity for user velocity
 * Implementation of the Wide Area Augmentation System (WAAS)
-* Writeup of the process and results
+* Finish PDF writeup of the process and results
