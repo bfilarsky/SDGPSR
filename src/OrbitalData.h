@@ -102,6 +102,8 @@ private:
 
     int currentTow_;
 
+    bool validSubframe_;
+
     EphemData currentEphemeris_;
 
     EphemData nextEphemeris_;

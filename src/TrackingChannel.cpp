@@ -38,7 +38,6 @@ State TrackingChannel::state(void) {
 bool TrackingChannel::processSamples(fftwVector trackingData) {
     for (auto it = signalTrackers_.begin(); it != signalTrackers_.end();) {
         if (!(*it)->processSamples(trackingData)) {
-            cout << "PRN " << prn_ << " channel lost track (" << signalTrackers_.size() - 1 << " left)" << endl;
             it = signalTrackers_.erase(it);
         } else
             ++it;
@@ -54,7 +53,6 @@ bool TrackingChannel::processSamples(fftwVector trackingData) {
             } else
                 ++it;
         }
-        cout << "PRN " << prn_ << " in full track" << endl;
         while (signalTrackers_.size() > 1) {
             signalTrackers_.pop_back();
         }

@@ -12,6 +12,7 @@
 #include <fftw3.h>
 #include <list>
 #include <memory>
+#include <unordered_map>
 #include <eigen3/Eigen/Dense>
 #include <atomic>
 #include "CaCode.h"
@@ -37,7 +38,13 @@ public:
 
     void basebandSignal(fftwVector &data);
 
-    void sync(void);
+    bool synced(void);
+
+    Vector3d positionECEF(void);
+
+    Vector3d positionLLA(void);
+
+    double userTimeSecOfWeek(void);
 
 private:
     void solve(void);
@@ -54,11 +61,13 @@ private:
 
     Vector4d userEstimateEcefTime_;
 
+    bool navSolutionStarted_;
+
     double fs_;
 
     std::queue<fftwVector> input_;
 
-    std::mutex inputMutex_;
+    std::mutex ioMutex_;
 
     FFT fft_;
 
@@ -71,7 +80,7 @@ private:
     std::thread signalProcessor_;
 
     ofstream userEstimates_;
-    ofstream innovations_;
+    std::unordered_map<unsigned,ofstream> innovations_;
 };
 
 #endif /* SRC_SDGPSR_H_ */

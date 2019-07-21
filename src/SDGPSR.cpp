@@ -8,10 +8,9 @@ const double SEARCH_WINDOW_STEP_SIZE = 500.0;
 SDGPSR::SDGPSR(double fs, double clockOffset) : fs_(fs), fft_(fs_ * CA_CODE_TIME), run_(true), signalProcessor_(
         &SDGPSR::signalProcessing, this) {
     clockOffset_ = clockOffset;
-    userEstimateEcefTime_ = Vector4d(6378137.0, 0.0, 0.0, 0.0);
-
+    userEstimateEcefTime_ = Vector4d(0.0, 0.0, 0.0, 0.0);
+    navSolutionStarted_ = false;
     userEstimates_.open("userEstimates.bin", std::ofstream::binary);
-    innovations_.open("innovations.bin", std::ofstream::binary);
 }
 
 SDGPSR::~SDGPSR() {
@@ -20,20 +19,13 @@ SDGPSR::~SDGPSR() {
 }
 
 void SDGPSR::basebandSignal(fftwVector &data) {
-    inputMutex_.lock();
+    std::lock_guard<std::mutex> lock(ioMutex_);
     input_.push(data);
-    inputMutex_.unlock();
 }
 
-void SDGPSR::sync(void) {
-    while (1) {
-        inputMutex_.lock();
-        size_t inputSize = input_.size();
-        inputMutex_.unlock();
-        if (!inputSize)
-            return;
-        usleep(1e3);
-    }
+bool SDGPSR::synced(void) {
+    std::lock_guard<std::mutex> lock(ioMutex_);
+    return !input_.size();
 }
 
 std::vector<double> SDGPSR::nonCoherentCorrelator(std::vector<fftwVector> &searchData, fftwVector &basebandCode,
@@ -117,9 +109,8 @@ SearchResult SDGPSR::search(std::vector<fftwVector> &searchData, unsigned prn, u
 }
 
 void SDGPSR::solve(void) {
-    vector<Vector4d> satPosAndTime;
+    vector<pair<unsigned,Vector4d>> satPosAndTime;
     double maxTime = 0.0;
-    cout << channels_.front()->transmitTime() << endl;
     for (auto &chan : channels_) {
         chan->sync();
         double time = chan->transmitTime();
@@ -138,27 +129,30 @@ void SDGPSR::solve(void) {
             temp[3] = time;
             if (time > maxTime)
                 maxTime = time;
-            satPosAndTime.push_back(temp);
+            satPosAndTime.push_back(pair<unsigned,Vector4d>(chan->prn(),temp));
         }
     }
 
-    if (satPosAndTime.size()) {
-        if (userEstimateEcefTime_[3] == 0.0)
+    if (satPosAndTime.size() >= 4) {
+        if (!navSolutionStarted_){
             userEstimateEcefTime_[3] = maxTime + .08;
+            navSolutionStarted_ = true;
+        }
         MatrixXd hMatrix(satPosAndTime.size(), 4);
         VectorXd deltaPseudoranges(satPosAndTime.size());
         for (unsigned i = 0; i < satPosAndTime.size(); ++i) {
-            double xRangeEst = satPosAndTime[i][0] - userEstimateEcefTime_[0];
-            double yRangeEst = satPosAndTime[i][1] - userEstimateEcefTime_[1];
-            double zRangeEst = satPosAndTime[i][2] - userEstimateEcefTime_[2];
+            double xRangeEst = satPosAndTime[i].second.x() - userEstimateEcefTime_[0];
+            double yRangeEst = satPosAndTime[i].second.y() - userEstimateEcefTime_[1];
+            double zRangeEst = satPosAndTime[i].second.z() - userEstimateEcefTime_[2];
             double rangeEstimate = sqrt(xRangeEst * xRangeEst + yRangeEst * yRangeEst + zRangeEst * zRangeEst);
-            double pseudorangeEst = (userEstimateEcefTime_[3] - satPosAndTime[i][3]) * SPEED_OF_LIGHT_MPS;
+            double pseudorangeEst = (userEstimateEcefTime_[3] - satPosAndTime[i].second.w()) * SPEED_OF_LIGHT_MPS;
             deltaPseudoranges(i) = rangeEstimate - pseudorangeEst;
 
-            double di = i;
-            innovations_.write((char*) &di, sizeof(di));
-            innovations_.write((char*) &rangeEstimate, sizeof(rangeEstimate));
-            innovations_.write((char*) &pseudorangeEst, sizeof(pseudorangeEst));
+            if (!innovations_.count(satPosAndTime[i].first))
+                innovations_.insert(pair<unsigned,ofstream>(satPosAndTime[i].first, std::ofstream("innovationsPrn" + std::to_string(satPosAndTime[i].first) + ".bin")));
+            innovations_[satPosAndTime[i].first].write((char*) &userEstimateEcefTime_[3], sizeof(userEstimateEcefTime_[3]));
+            innovations_[satPosAndTime[i].first].write((char*) &rangeEstimate, sizeof(rangeEstimate));
+            innovations_[satPosAndTime[i].first].write((char*) &pseudorangeEst, sizeof(pseudorangeEst));
 
             hMatrix(i, 0) = xRangeEst / rangeEstimate;
             hMatrix(i, 1) = yRangeEst / rangeEstimate;
@@ -172,13 +166,6 @@ void SDGPSR::solve(void) {
         userEstimateEcefTime_[3] += deltaEst[3] / SPEED_OF_LIGHT_MPS;
 
         userEstimates_.write((char*) &userEstimateEcefTime_, sizeof(userEstimateEcefTime_));
-
-        //Poor man's Lat/Lon conversion - assuming earth is perfect sphere
-        double lat = atan2(userEstimateEcefTime_.z(), sqrt(userEstimateEcefTime_.x() * userEstimateEcefTime_.x() + userEstimateEcefTime_.y() * userEstimateEcefTime_.y())) * 180.0 / M_PI;
-        double lon = atan2(userEstimateEcefTime_.y(), userEstimateEcefTime_.x()) * 180.0 / M_PI;
-        cout << floor(fabs(lat)) << ' ' << floor(fmod(fabs(lat), 1.0) * 60.0) << "\' " << floor(fmod(fmod(fabs(lat), 1.0) * 60.0, 1.0) * 60.0) << "\""<< endl;
-        cout << floor(fabs(lon)) << ' ' << floor(fmod(fabs(lon), 1.0) * 60.0) << "\' " << floor(fmod(fmod(fabs(lon), 1.0) * 60.0, 1.0) * 60.0) << "\""<< endl;
-        cout << userEstimateEcefTime_ - Vector4d(6378137.0, 0.0, 0.0, 0.0) << endl << endl;
     }
 }
 
@@ -188,30 +175,27 @@ void SDGPSR::signalProcessing() {
     std::vector<fftwVector> searchData(CORR_COUNT);
     for (unsigned i = 0; i < CORR_COUNT; ++i) {
         while (1) {
-            inputMutex_.lock();
+            ioMutex_.lock();
             size_t inputSize = input_.size();
-            inputMutex_.unlock();
+            ioMutex_.unlock();
             if (inputSize)
                 break;
             if (!run_)
                 return;
             usleep(1e3);
         }
-        inputMutex_.lock();
+        ioMutex_.lock();
         searchData[i].resize(input_.front().size());
         fft_.forward(&input_.front()[0], &searchData[i][0]);
         input_.pop();
-        inputMutex_.unlock();
+        ioMutex_.unlock();
     }
 
     //Using the FFT'd data, search for all PRNs
     for (unsigned prn = 1; prn <= 32; ++prn) {
-        cout << prn << endl;
         SearchResult searchResult = search(searchData, prn, CORR_COUNT, clockOffset_ - SEARCH_WINDOW_BANDWIDTH / 2.0,
                 clockOffset_ + SEARCH_WINDOW_BANDWIDTH / 2.0, SEARCH_WINDOW_STEP_SIZE);
         if (searchResult.found) {
-            cout << prn << ',' << searchResult.power << ',' << searchResult.sampleOffset << ','
-                    << searchResult.baseBandFreq << endl;
             channels_.push_back(std::unique_ptr<TrackingChannel>(new TrackingChannel(fs_, prn, searchResult)));
         }
     }
@@ -228,31 +212,48 @@ void SDGPSR::signalProcessing() {
     while (run_) {
         for (auto chanIterator = channels_.begin(); chanIterator != channels_.end();) {
             while (1) {
-                inputMutex_.lock();
+                ioMutex_.lock();
                 size_t inputSize = input_.size();
-                inputMutex_.unlock();
+                ioMutex_.unlock();
                 if (inputSize)
                     break;
                 if (!run_)
                     return;
                 usleep(1e3);
             }
-            inputMutex_.lock();
+            ioMutex_.lock();
             auto data = input_.front();
-            inputMutex_.unlock();
+            ioMutex_.unlock();
             if (!(*chanIterator)->processSamples(data)) {
-                cout << "PRN " << (*chanIterator)->prn() << " lost track" << endl;
                 chanIterator = channels_.erase(chanIterator);
             } else
                 ++chanIterator;
         }
-        inputMutex_.lock();
+        ioMutex_.lock();
         input_.pop();
-        inputMutex_.unlock();
-        if (userEstimateEcefTime_[3] != 0.0)
+        ioMutex_.unlock();
+        if (navSolutionStarted_)
             userEstimateEcefTime_[3] += CA_CODE_TIME;
         if (++trackingPacketCount % 100 == 0) {
             solve();
         }
     }
+}
+
+Vector3d SDGPSR::positionECEF(void){
+    std::lock_guard<std::mutex> lock(ioMutex_);
+    return Vector3d(userEstimateEcefTime_.x(), userEstimateEcefTime_.y(), userEstimateEcefTime_.z());
+}
+
+Vector3d SDGPSR::positionLLA(void){
+    //TODO: Make this the WGS84 conversion
+    std::lock_guard<std::mutex> lock(ioMutex_);
+    double lat = atan2(userEstimateEcefTime_.z(), sqrt(userEstimateEcefTime_.x() * userEstimateEcefTime_.x() + userEstimateEcefTime_.y() * userEstimateEcefTime_.y())) * 180.0 / M_PI;
+    double lon = atan2(userEstimateEcefTime_.y(), userEstimateEcefTime_.x()) * 180.0 / M_PI;
+    return Vector3d(lat, lon, 0.0);
+}
+
+double SDGPSR::userTimeSecOfWeek(void){
+    std::lock_guard<std::mutex> lock(ioMutex_);
+    return userEstimateEcefTime_.w();
 }

@@ -14,8 +14,6 @@ LNAV_Data::~LNAV_Data() {
 }
 
 double LNAV_Data::timeOfLastNavBit(void) {
-    if (!trackingSubFrame_)
-        return -1.0;
     double wordTimeOfWeek = orbitalData_.currentNavWordTimeOfWeek();
     if (wordTimeOfWeek == -1.0)
         return -1.0;

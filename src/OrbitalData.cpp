@@ -6,6 +6,7 @@ const double F_RELATIVISTIC = -4.442807633e-10;
 
 OrbitalData::OrbitalData() {
     currentTow_ = -1;
+    validSubframe_ = true;
 }
 
 OrbitalData::~OrbitalData() {
@@ -13,7 +14,7 @@ OrbitalData::~OrbitalData() {
 }
 
 double OrbitalData::currentNavWordTimeOfWeek(void) {
-    if (currentTow_ == -1)
+    if (currentTow_ == -1 || !clockData_.valid_ || !currentEphemeris_.valid_)
         return -1.0;
     double navBitTime = currentTow_ + WORD_PERIOD * words_.size();
     double timeFromEpochClock = navBitTime - clockData_.Toc_;
@@ -45,9 +46,7 @@ double OrbitalData::currentNavWordTimeOfWeek(void) {
 
 bool OrbitalData::process(const LNAV_Word &word) {
     if (!word.valid()) {
-        words_.clear();
-        currentTow_ = -1;
-        return false;
+        validSubframe_ = false;
     }
 
     words_.push_back(word);
@@ -55,22 +54,31 @@ bool OrbitalData::process(const LNAV_Word &word) {
     //All the info we need is on SubFrames 1-3, ignoring SFs 4 & 5
     //See figure 20-2 in IS-GPS-200J
     if (words_.size() == 10) {
-        currentTow_ = words_[1].getUnsignedValue(1, 17) * 6;
-        switch (words_[1].getUnsignedValue(20, 3)) {
-            case 1:
-                processSubframe1(words_);
-                break;
-            case 2:
-                processSubframe2(words_);
-                break;
-            case 3:
-                processSubframe3(words_);
-                break;
-            default:
-                break;
+        //If all the words in the subframe were valid, process them
+        if (validSubframe_){
+            currentTow_ = words_[1].getUnsignedValue(1, 17) * 6;
+            switch (words_[1].getUnsignedValue(20, 3)) {
+                case 1:
+                    processSubframe1(words_);
+                    break;
+                case 2:
+                    processSubframe2(words_);
+                    break;
+                case 3:
+                    processSubframe3(words_);
+                    break;
+                default:
+                    break;
+            }
+        }
+        //Otherwise, just increment the time of week by the 6 seconds the subframe takes
+        else{
+            currentTow_ += 6;
         }
         words_.clear();
+        validSubframe_ = true;
     }
+    //TODO: Handle loss of bit sync
     return true;
 }
 
@@ -155,10 +163,8 @@ Vector3d OrbitalData::satellitePosition(double timeOfWeek) {
     double inclinCorr = currentEphemeris_.Cis_ * sin2ArgOfLat + currentEphemeris_.Cic_ * cos2ArgOfLat;
 
     double corrArgOfLat = argOfLat + argOfLatCorr;
-    double corrRadius = currentEphemeris_.semiMajorAxis_ * (1.0 - currentEphemeris_.ecc_ * cos(eccentricAnomaly))
-            + radiusCorr;
-    double corrInclin = currentEphemeris_.inclination_ + currentEphemeris_.inclinationRate_ * timeFromEpoch
-            + inclinCorr;
+    double corrRadius = currentEphemeris_.semiMajorAxis_ * (1.0 - currentEphemeris_.ecc_ * cos(eccentricAnomaly)) + radiusCorr;
+    double corrInclin = currentEphemeris_.inclination_ + currentEphemeris_.inclinationRate_ * timeFromEpoch + inclinCorr;
 
     double xkPrime = corrRadius * cos(corrArgOfLat);
     double ykPrime = corrRadius * sin(corrArgOfLat);
