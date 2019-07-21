@@ -18,6 +18,7 @@ struct ClockData {
     unsigned weekNumber_;
     unsigned IODC_;
     unsigned Toc_;
+    double Tgd_;
     double af2_;
     double af1_;
     double af0_;
@@ -27,6 +28,7 @@ struct ClockData {
         weekNumber_ = 0;
         IODC_ = 0;
         Toc_ = 0;
+        Tgd_ = 0.0;
         af2_ = 0.0;
         af1_ = 0.0;
         af0_ = 0.0;

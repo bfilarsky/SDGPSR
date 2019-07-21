@@ -39,7 +39,7 @@ double OrbitalData::currentNavWordTimeOfWeek(void) {
 
     double deltaTr = F_RELATIVISTIC * currentEphemeris_.ecc_ * currentEphemeris_.semiMajorAxisSqrt_
             * sin(eccentricAnomaly);
-    double deltaTsv = 0.0; //clockCorrection + deltaTr;
+    double deltaTsv = clockCorrection + deltaTr - clockData_.Tgd_;
     return navBitTime - deltaTsv;
 }
 
@@ -77,12 +77,13 @@ bool OrbitalData::process(const LNAV_Word &word) {
 //Clock data is all on subframe 1, we can just update all clock info when we get this
 //See Figure 20-1 (sheet 1 of 11), and Table 20-I in IS-GPS-200J
 void OrbitalData::processSubframe1(const vector<LNAV_Word> &words) {
-    clockData_.weekNumber_ = words[2].getUnsignedValue(1, 10);        //Wn
-    clockData_.IODC_ = (words[2].getUnsignedValue(23, 2) << 8) | words[6].getUnsignedValue(1, 8); //IODC 8 LSBs
-    clockData_.Toc_ = words[7].getUnsignedValue(9, 16) * pow(2, 4);    //Toc
-    clockData_.af2_ = words[8].getSignedValue(1, 8) * pow(2.0, -55.0); //Af2
-    clockData_.af1_ = words[8].getSignedValue(9, 16) * pow(2.0, -43.0); //Af1
-    clockData_.af0_ = words[9].getSignedValue(1, 22) * pow(2.0, -31.0); //Af0
+    clockData_.weekNumber_ = words[2].getUnsignedValue(1, 10);
+    clockData_.IODC_ = words[2].getUnsignedValue(23, 2) << 8 | words[6].getUnsignedValue(1, 8);
+    clockData_.Tgd_ = words[6].getSignedValue(17, 8) * pow(2, -31.0);
+    clockData_.Toc_ = words[7].getUnsignedValue(9, 16) * pow(2, 4);
+    clockData_.af2_ = words[8].getSignedValue(1, 8) * pow(2.0, -55.0);
+    clockData_.af1_ = words[8].getSignedValue(9, 16) * pow(2.0, -43.0);
+    clockData_.af0_ = words[9].getSignedValue(1, 22) * pow(2.0, -31.0);
     clockData_.valid_ = true;
 }
 

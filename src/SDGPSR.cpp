@@ -1,5 +1,6 @@
 #include "SDGPSR.h"
 #include <iomanip>
+#include <unistd.h>
 
 const double SEARCH_WINDOW_BANDWIDTH = 10e3;
 const double SEARCH_WINDOW_STEP_SIZE = 500.0;
@@ -7,25 +8,32 @@ const double SEARCH_WINDOW_STEP_SIZE = 500.0;
 SDGPSR::SDGPSR(double fs, double clockOffset) : fs_(fs), fft_(fs_ * CA_CODE_TIME), run_(true), signalProcessor_(
         &SDGPSR::signalProcessing, this) {
     clockOffset_ = clockOffset;
-    posECEF_ = Vector3d(0.0, 0.0, 0.0);
+    userEstimateEcefTime_ = Vector4d(6378137.0, 0.0, 0.0, 0.0);
+
+    userEstimates_.open("userEstimates.bin", std::ofstream::binary);
+    innovations_.open("innovations.bin", std::ofstream::binary);
 }
 
 SDGPSR::~SDGPSR() {
     run_ = false;
-    for (auto &chan : channels_)
-        delete chan;
     signalProcessor_.join();
 }
 
 void SDGPSR::basebandSignal(fftwVector &data) {
+    inputMutex_.lock();
     input_.push(data);
+    inputMutex_.unlock();
 }
 
-void SDGPSR::join(void) {
-    while (input_.size())
-        ;
-    run_ = false;
-    signalProcessor_.join();
+void SDGPSR::sync(void) {
+    while (1) {
+        inputMutex_.lock();
+        size_t inputSize = input_.size();
+        inputMutex_.unlock();
+        if (!inputSize)
+            return;
+        usleep(1e3);
+    }
 }
 
 std::vector<double> SDGPSR::nonCoherentCorrelator(std::vector<fftwVector> &searchData, fftwVector &basebandCode,
@@ -113,8 +121,15 @@ void SDGPSR::solve(void) {
     double maxTime = 0.0;
     cout << channels_.front()->transmitTime() << endl;
     for (auto &chan : channels_) {
+        chan->sync();
         double time = chan->transmitTime();
         Vector3d position = chan->satellitePosition(time);
+        if (userEstimateEcefTime_[3] != 0.0) {
+            double tof = userEstimateEcefTime_[3] - time;
+            double earthRotation = -tof * OMEGA_EARTH;
+            position[0] = position[0] * cos(earthRotation) - position[1] * sin(earthRotation);
+            position[1] = position[0] * sin(earthRotation) + position[1] * cos(earthRotation);
+        }
         if (position != Vector3d(0.0, 0.0, 0.0)) {
             Vector4d temp;
             temp[0] = position.x();
@@ -128,38 +143,42 @@ void SDGPSR::solve(void) {
     }
 
     if (satPosAndTime.size()) {
-        Vector4d userEstimate(posECEF_.x(), posECEF_.z(), posECEF_.z(), maxTime + .08);
+        if (userEstimateEcefTime_[3] == 0.0)
+            userEstimateEcefTime_[3] = maxTime + .08;
         MatrixXd hMatrix(satPosAndTime.size(), 4);
         VectorXd deltaPseudoranges(satPosAndTime.size());
         for (unsigned i = 0; i < satPosAndTime.size(); ++i) {
-            double xRangeEst = satPosAndTime[i][0] - userEstimate[0];
-            double yRangeEst = satPosAndTime[i][1] - userEstimate[1];
-            double zRangeEst = satPosAndTime[i][2] - userEstimate[2];
+            double xRangeEst = -(satPosAndTime[i][0] - userEstimateEcefTime_[0]);
+            double yRangeEst = -(satPosAndTime[i][1] - userEstimateEcefTime_[1]);
+            double zRangeEst = -(satPosAndTime[i][2] - userEstimateEcefTime_[2]);
             double rangeEstimate = sqrt(xRangeEst * xRangeEst + yRangeEst * yRangeEst + zRangeEst * zRangeEst);
-            double pseudorangeEst = (userEstimate[3] - satPosAndTime[i][3]) * SPEED_OF_LIGHT_MPS;
+            double pseudorangeEst = (userEstimateEcefTime_[3] - satPosAndTime[i][3]) * SPEED_OF_LIGHT_MPS;
             deltaPseudoranges(i) = rangeEstimate - pseudorangeEst;
+
+            double di = i;
+            innovations_.write((char*) &di, sizeof(di));
+            innovations_.write((char*) &rangeEstimate, sizeof(rangeEstimate));
+            innovations_.write((char*) &pseudorangeEst, sizeof(pseudorangeEst));
+
             hMatrix(i, 0) = xRangeEst / rangeEstimate;
             hMatrix(i, 1) = yRangeEst / rangeEstimate;
             hMatrix(i, 2) = zRangeEst / rangeEstimate;
             hMatrix(i, 3) = 1.0;
         }
         Vector4d deltaEst = (hMatrix.transpose() * hMatrix).ldlt().solve(hMatrix.transpose() * deltaPseudoranges);
-        userEstimate[0] += deltaEst[0];
-        userEstimate[1] += deltaEst[1];
-        userEstimate[2] += deltaEst[2];
-        userEstimate[3] -= deltaEst[3] / SPEED_OF_LIGHT_MPS;
-        posECEF_.x() = userEstimate[0];
-        posECEF_.y() = userEstimate[1];
-        posECEF_.z() = userEstimate[2];
-        //cout << "User: " << h << endl;
-        //cout << userEstimate << endl;
-        double lat = atan2(posECEF_.z(), sqrt(posECEF_.x() * posECEF_.x() + posECEF_.y() * posECEF_.y())) * 180.0 / M_PI;
-        double lon = atan2(posECEF_.y(), posECEF_.x()) * 180.0 / M_PI;
-        cout << floor(fabs(lat)) << ' ' << floor(fmod(fabs(lat), 1.0) * 60.0) << "\' "
-                << floor(fmod(fmod(fabs(lat), 1.0) * 60.0, 1.0) * 60.0) << "\"" << endl;
-        cout << floor(fabs(lon)) << ' ' << floor(fmod(fabs(lon), 1.0) * 60.0) << "\' "
-                << floor(fmod(fmod(fabs(lon), 1.0) * 60.0, 1.0) * 60.0) << "\"" << endl;
-        cout << posECEF_ - Vector3d(6378137.0, 0.0, 0.0) << endl;
+        userEstimateEcefTime_[0] -= deltaEst[0];
+        userEstimateEcefTime_[1] -= deltaEst[1];
+        userEstimateEcefTime_[2] -= deltaEst[2];
+        userEstimateEcefTime_[3] += deltaEst[3] / SPEED_OF_LIGHT_MPS;
+
+        userEstimates_.write((char*) &userEstimateEcefTime_, sizeof(userEstimateEcefTime_));
+
+        //Poor man's Lat/Lon conversion - assuming earth is perfect sphere
+        double lat = atan2(userEstimateEcefTime_.z(), sqrt(userEstimateEcefTime_.x() * userEstimateEcefTime_.x() + userEstimateEcefTime_.y() * userEstimateEcefTime_.y())) * 180.0 / M_PI;
+        double lon = atan2(userEstimateEcefTime_.y(), userEstimateEcefTime_.x()) * 180.0 / M_PI;
+        cout << floor(fabs(lat)) << ' ' << floor(fmod(fabs(lat), 1.0) * 60.0) << "\' " << floor(fmod(fmod(fabs(lat), 1.0) * 60.0, 1.0) * 60.0) << "\""<< endl;
+        cout << floor(fabs(lon)) << ' ' << floor(fmod(fabs(lon), 1.0) * 60.0) << "\' " << floor(fmod(fmod(fabs(lon), 1.0) * 60.0, 1.0) * 60.0) << "\""<< endl;
+        cout << userEstimateEcefTime_ - Vector4d(6378137.0, 0.0, 0.0, 0.0) << endl << endl;
     }
 }
 
@@ -168,11 +187,21 @@ void SDGPSR::signalProcessing() {
     const unsigned CORR_COUNT = 128;
     std::vector<fftwVector> searchData(CORR_COUNT);
     for (unsigned i = 0; i < CORR_COUNT; ++i) {
-        while (!input_.size())
-            ;
+        while (1) {
+            inputMutex_.lock();
+            size_t inputSize = input_.size();
+            inputMutex_.unlock();
+            if (inputSize)
+                break;
+            if (!run_)
+                return;
+            usleep(1e3);
+        }
+        inputMutex_.lock();
         searchData[i].resize(input_.front().size());
         fft_.forward(&input_.front()[0], &searchData[i][0]);
         input_.pop();
+        inputMutex_.unlock();
     }
 
     //Using the FFT'd data, search for all PRNs
@@ -183,7 +212,7 @@ void SDGPSR::signalProcessing() {
         if (searchResult.found) {
             cout << prn << ',' << searchResult.power << ',' << searchResult.sampleOffset << ','
                     << searchResult.baseBandFreq << endl;
-            channels_.push_back(new TrackingChannel(fs_, prn, searchResult));
+            channels_.push_back(std::unique_ptr<TrackingChannel>(new TrackingChannel(fs_, prn, searchResult)));
         }
     }
 
@@ -197,20 +226,32 @@ void SDGPSR::signalProcessing() {
     //Begin tracking satellites
     unsigned trackingPacketCount = 0;
     while (run_) {
-        for (auto it = channels_.begin(); it != channels_.end();) {
-            auto data = input_.front();
-            if (!(*it)->processSamples(data)) {
-                cout << "PRN " << (*it)->prn() << " lost track" << endl;
-                delete *it;
-                it = channels_.erase(it);
-            } else
-                ++it;
-        }
-        input_.pop();
-        if (++trackingPacketCount % 1000 == 0) {
-            for (auto &chan : channels_) {
-                chan->sync();
+        for (auto chanIterator = channels_.begin(); chanIterator != channels_.end();) {
+            while (1) {
+                inputMutex_.lock();
+                size_t inputSize = input_.size();
+                inputMutex_.unlock();
+                if (inputSize)
+                    break;
+                if (!run_)
+                    return;
+                usleep(1e3);
             }
+            inputMutex_.lock();
+            auto data = input_.front();
+            inputMutex_.unlock();
+            if (!(*chanIterator)->processSamples(data)) {
+                cout << "PRN " << (*chanIterator)->prn() << " lost track" << endl;
+                chanIterator = channels_.erase(chanIterator);
+            } else
+                ++chanIterator;
+        }
+        inputMutex_.lock();
+        input_.pop();
+        inputMutex_.unlock();
+        if (userEstimateEcefTime_[3] != 0.0)
+            userEstimateEcefTime_[3] += CA_CODE_TIME;
+        if (++trackingPacketCount % 100 == 0) {
             solve();
         }
     }

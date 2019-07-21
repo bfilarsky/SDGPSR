@@ -7,6 +7,7 @@
 #include <complex>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <list>
 #include "CaCode.h"
 #include "FFT.h"
@@ -71,7 +72,9 @@ private:
 
     void threadFunction(void);
 
-    bool runThread_;
+    atomic_bool runThread_;
+
+    atomic_bool synced_;
 
     std::mutex trackingDataAccess_;
 

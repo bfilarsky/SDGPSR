@@ -23,8 +23,7 @@ The receiver takes in data at 1 ms intervals (the length of the C/A sequence), a
 
 ### Major items that still need to be implemented:
 
-* Satellite Errors (clock, relativistic, ionospheric delays, tropospheric delays, etc)
-* Sagnac effect
+* Satellite Errors (ionospheric delays, tropospheric delays, etc)
 * Add/Remove satellites as they come into/disappear from view
 * Demodulate Almanac to determine when new satellites are visible
 * Satellite velocity

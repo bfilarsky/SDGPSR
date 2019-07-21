@@ -11,6 +11,7 @@
 #include <thread>
 #include <fftw3.h>
 #include <list>
+#include <memory>
 #include <eigen3/Eigen/Dense>
 #include <atomic>
 #include "CaCode.h"
@@ -36,7 +37,7 @@ public:
 
     void basebandSignal(fftwVector &data);
 
-    void join(void);
+    void sync(void);
 
 private:
     void solve(void);
@@ -51,21 +52,26 @@ private:
     SearchResult search(std::vector<fftwVector> &searchData, unsigned prn, unsigned corrCount, double freqStart,
             double freqStop, double freqStep);
 
-    Vector3d posECEF_;
+    Vector4d userEstimateEcefTime_;
 
     double fs_;
 
     std::queue<fftwVector> input_;
 
+    std::mutex inputMutex_;
+
     FFT fft_;
 
     atomic_bool run_;
 
-    std::list<TrackingChannel*> channels_;
+    std::list<std::unique_ptr<TrackingChannel>> channels_;
 
     double clockOffset_;
 
     std::thread signalProcessor_;
+
+    ofstream userEstimates_;
+    ofstream innovations_;
 };
 
 #endif /* SRC_SDGPSR_H_ */

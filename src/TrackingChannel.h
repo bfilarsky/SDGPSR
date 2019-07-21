@@ -8,6 +8,7 @@
 #include <thread>
 #include <mutex>
 #include <list>
+#include <memory>
 #include "SignalTracker.h"
 
 using std::complex;
@@ -35,7 +36,7 @@ public:
     virtual ~TrackingChannel();
 
 private:
-    std::list<SignalTracker*> signalTrackers_;
+    std::list<std::unique_ptr<SignalTracker>> signalTrackers_;
 
     unsigned inputPackets_;
 

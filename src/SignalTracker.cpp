@@ -4,7 +4,7 @@
 const double CARRIER_CODE_SF = 1.023 / 1575.42;
 
 SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult, double searchFreqOffset) : runThread_(
-        true), early_(fs, prn), prompt_(fs, prn, true), late_(fs, prn), carrierCorrelator_(fs, prn), carrierPhaseLPF_(
+        true), synced_(false), early_(fs, prn), prompt_(fs, prn, true), late_(fs, prn), carrierCorrelator_(fs, prn), carrierPhaseLPF_(
         0.0247), carrierFreqLPF_(0.0247), processingThread_(&SignalTracker::threadFunction, this) {
     prn_ = prn;
     fs_ = fs;
@@ -50,11 +50,13 @@ void SignalTracker::threadFunction(void) {
         size_t size = trackingData_.size();
         trackingDataAccess_.unlock();
         if (size) {
+            synced_ = false;
             trackingDataAccess_.lock();
             trackingData = std::move(trackingData_.front());
             trackingData_.pop_front();
             trackingDataAccess_.unlock();
         } else {
+            synced_ = true;
             usleep(1e3);
             continue;
         }
@@ -201,7 +203,7 @@ double SignalTracker::transmitTime(void) {
     double navTime = lnav_data_.timeOfLastNavBit();
     if (navTime == -1.0)
         return -1.0;
-    return navTime + prompt_.integrationTime() + codetime_; //CA_CODE_TIME -
+    return navTime + prompt_.integrationTime() + codetime_;
 }
 
 Vector3d SignalTracker::satellitePosition(double timeOfWeek) {
@@ -228,13 +230,12 @@ bool SignalTracker::processSamples(fftwVector trackingData) {
 void SignalTracker::sync(void) {
     while (1) {
         trackingDataAccess_.lock();
-        if (trackingData_.size()) {
-            trackingDataAccess_.unlock();
+        size_t dataSize = trackingData_.size();
+        trackingDataAccess_.unlock();
+        if (!synced_ || dataSize)
             usleep(1e3);
-        } else {
-            trackingDataAccess_.unlock();
-            break;
-        }
+        else
+            return;
     }
 }
 
