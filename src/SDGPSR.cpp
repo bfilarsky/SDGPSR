@@ -217,7 +217,7 @@ void SDGPSR::signalProcessing() {
     }
 
     //Ensure the minimum number of required satellites have been found
-    const unsigned MIN_SATELLITES = 1;
+    const unsigned MIN_SATELLITES = 4;
     if (channels_.size() < MIN_SATELLITES) {
         cout << channels_.size() << " satellites found. Minimum " << MIN_SATELLITES << " required" << endl;
         exit(1);
