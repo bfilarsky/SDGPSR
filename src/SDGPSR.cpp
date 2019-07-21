@@ -148,9 +148,9 @@ void SDGPSR::solve(void) {
         MatrixXd hMatrix(satPosAndTime.size(), 4);
         VectorXd deltaPseudoranges(satPosAndTime.size());
         for (unsigned i = 0; i < satPosAndTime.size(); ++i) {
-            double xRangeEst = -(satPosAndTime[i][0] - userEstimateEcefTime_[0]);
-            double yRangeEst = -(satPosAndTime[i][1] - userEstimateEcefTime_[1]);
-            double zRangeEst = -(satPosAndTime[i][2] - userEstimateEcefTime_[2]);
+            double xRangeEst = satPosAndTime[i][0] - userEstimateEcefTime_[0];
+            double yRangeEst = satPosAndTime[i][1] - userEstimateEcefTime_[1];
+            double zRangeEst = satPosAndTime[i][2] - userEstimateEcefTime_[2];
             double rangeEstimate = sqrt(xRangeEst * xRangeEst + yRangeEst * yRangeEst + zRangeEst * zRangeEst);
             double pseudorangeEst = (userEstimateEcefTime_[3] - satPosAndTime[i][3]) * SPEED_OF_LIGHT_MPS;
             deltaPseudoranges(i) = rangeEstimate - pseudorangeEst;
@@ -166,9 +166,9 @@ void SDGPSR::solve(void) {
             hMatrix(i, 3) = 1.0;
         }
         Vector4d deltaEst = (hMatrix.transpose() * hMatrix).ldlt().solve(hMatrix.transpose() * deltaPseudoranges);
-        userEstimateEcefTime_[0] -= deltaEst[0];
-        userEstimateEcefTime_[1] -= deltaEst[1];
-        userEstimateEcefTime_[2] -= deltaEst[2];
+        userEstimateEcefTime_[0] += deltaEst[0];
+        userEstimateEcefTime_[1] += deltaEst[1];
+        userEstimateEcefTime_[2] += deltaEst[2];
         userEstimateEcefTime_[3] += deltaEst[3] / SPEED_OF_LIGHT_MPS;
 
         userEstimates_.write((char*) &userEstimateEcefTime_, sizeof(userEstimateEcefTime_));
