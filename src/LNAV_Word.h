@@ -12,24 +12,24 @@ const unsigned SRC_BITS = 24;
 
 class LNAV_Word {
 public:
-	LNAV_Word(const deque<int> &word, unsigned lastWordBit29, unsigned lastWordBit30, bool inverted = false);
+    LNAV_Word(const deque<int> &word, unsigned lastWordBit29, unsigned lastWordBit30, bool inverted = false);
 
-	~LNAV_Word();
+    ~LNAV_Word();
 
-	bool valid(void) const;
+    bool valid(void) const;
 
-	unsigned operator [](size_t idx) const;
+    unsigned operator [](size_t idx) const;
 
-	unsigned getUnsignedValue(unsigned start, unsigned length) const;
+    unsigned getUnsignedValue(unsigned start, unsigned length) const;
 
-	int getSignedValue(unsigned start, unsigned length) const;
+    int getSignedValue(unsigned start, unsigned length) const;
 
 private:
-	bool computeChecksum(unsigned lastWordBit29, unsigned lastWordBit30);
+    bool computeChecksum(unsigned lastWordBit29, unsigned lastWordBit30);
 
-	vector<unsigned> word_;
+    vector<unsigned> word_;
 
-	bool valid_;
+    bool valid_;
 };
 
 #endif /* LNAV_WORD_H_ */

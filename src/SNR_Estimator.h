@@ -7,18 +7,18 @@ using std::complex;
 
 class SNR_Estimator {
 public:
-	SNR_Estimator();
-	virtual ~SNR_Estimator();
+    SNR_Estimator();
+    virtual ~SNR_Estimator();
 
-	void input(complex<double> carrier);
+    void input(complex<double> carrier);
 
-	double estimate(void);
+    double estimate(void);
 
 private:
-	double norm2_;
-	double norm4_;
-	unsigned sampleCount_;
-	double lastEstimate_;
+    double norm2_;
+    double norm4_;
+    unsigned sampleCount_;
+    double lastEstimate_;
 };
 
 #endif /* SRC_CNOESTIMATOR_H_ */

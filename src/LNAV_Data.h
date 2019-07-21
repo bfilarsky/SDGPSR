@@ -14,28 +14,28 @@ using namespace std;
 
 class LNAV_Data {
 public:
-	LNAV_Data();
+    LNAV_Data();
 
-	virtual ~LNAV_Data();
+    virtual ~LNAV_Data();
 
-	void navBit(int bit, bool &flipBits);
+    void navBit(int bit, bool &flipBits);
 
-	double timeOfLastNavBit(void);
+    double timeOfLastNavBit(void);
 
-	Vector3d satellitePosition(double timeOfWeek);
+    Vector3d satellitePosition(double timeOfWeek);
 
 private:
-	bool isTlmWord(deque<int> &bits, bool &flipBits);
+    bool isTlmWord(deque<int> &bits, bool &flipBits);
 
-	deque<int> bitHistory_;
+    deque<int> bitHistory_;
 
-	OrbitalData orbitalData_;
+    OrbitalData orbitalData_;
 
-	bool trackingSubFrame_;
+    bool trackingSubFrame_;
 
-	unsigned lastWordBit29_;
+    unsigned lastWordBit29_;
 
-	unsigned lastWordBit30_;
+    unsigned lastWordBit30_;
 };
 
 #endif /* SRC_LNAV_DATA_H_ */

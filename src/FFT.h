@@ -10,23 +10,23 @@ typedef std::vector<std::complex<double>, fftw_allocator<std::complex<double>>> 
 
 class FFT {
 public:
-	FFT(unsigned size);
+    FFT(unsigned size);
 
-	virtual ~FFT();
+    virtual ~FFT();
 
-	void forward(std::complex<double> *in, std::complex<double> *out);
+    void forward(std::complex<double> *in, std::complex<double> *out);
 
-	void reverse(std::complex<double> *in, std::complex<double> *out);
+    void reverse(std::complex<double> *in, std::complex<double> *out);
 
-	void forward(std::complex<double> *inplace);
+    void forward(std::complex<double> *inplace);
 
-	void reverse(std::complex<double> *inplace);
+    void reverse(std::complex<double> *inplace);
 
 private:
-	fftw_plan forward_;
-	fftw_plan reverse_;
-	fftw_plan forwardIp_;
-	fftw_plan reverseIp_;
+    fftw_plan forward_;
+    fftw_plan reverse_;
+    fftw_plan forwardIp_;
+    fftw_plan reverseIp_;
 };
 
 #endif /* SRC_FFT_H_ */

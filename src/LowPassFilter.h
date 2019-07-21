@@ -5,18 +5,18 @@
 
 class LowPassFilter {
 public:
-	LowPassFilter(double k);
+    LowPassFilter(double k);
 
-	virtual ~LowPassFilter();
+    virtual ~LowPassFilter();
 
-	double iterate(double val);
+    double iterate(double val);
 
-	double last(void);
+    double last(void);
 
 private:
-	double k_;
+    double k_;
 
-	double last_;
+    double last_;
 };
 
 #endif /* SRC_LOWPASSFILTER_H_ */

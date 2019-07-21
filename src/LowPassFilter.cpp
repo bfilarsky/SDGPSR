@@ -1,20 +1,20 @@
 #include "LowPassFilter.h"
 
 LowPassFilter::LowPassFilter(double k) {
-	k_   = k;
-	last_ = 0.0;
+    k_ = k;
+    last_ = 0.0;
 }
 
 LowPassFilter::~LowPassFilter() {
 
 }
 
-double LowPassFilter::iterate(double input){
-	double retVal = (input - last_) * k_ + last_;
-	last_ = retVal;
-	return retVal;
+double LowPassFilter::iterate(double input) {
+    double retVal = (input - last_) * k_ + last_;
+    last_ = retVal;
+    return retVal;
 }
 
-double LowPassFilter::last(void){
-	return last_;
+double LowPassFilter::last(void) {
+    return last_;
 }

@@ -5,16 +5,16 @@
 
 class NavBitEdgeDetector {
 public:
-	NavBitEdgeDetector();
+    NavBitEdgeDetector();
 
-	virtual ~NavBitEdgeDetector();
+    virtual ~NavBitEdgeDetector();
 
-	bool push_back(size_t candidate);
+    bool push_back(size_t candidate);
 
-	void clear(void);
+    void clear(void);
 
 private:
-	std::deque<size_t> navBitCandidates_;
+    std::deque<size_t> navBitCandidates_;
 };
 
 #endif /* SRC_NAVBITEDGEDETECTOR_H_ */

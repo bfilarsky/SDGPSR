@@ -30,49 +30,42 @@ const double SPEED_OF_LIGHT_MPS = 299792458;
 
 class SDGPSR {
 public:
-	SDGPSR(double fs, double clockOffset);
+    SDGPSR(double fs, double clockOffset);
 
-	virtual ~SDGPSR();
+    virtual ~SDGPSR();
 
-	void basebandSignal(fftwVector &data);
+    void basebandSignal(fftwVector &data);
 
-	void join(void);
+    void join(void);
 
 private:
-	void solve(void);
+    void solve(void);
 
-	void signalProcessing();
+    void signalProcessing();
 
-	std::vector<double> nonCoherentCorrelator(std::vector<fftwVector> &searchData,
-			fftwVector &basebandCode,
-			unsigned corrCount);
+    std::vector<double> nonCoherentCorrelator(std::vector<fftwVector> &searchData, fftwVector &basebandCode,
+            unsigned corrCount);
 
-	void basebandGenerator(unsigned prn,
-			fftwVector &basebandCode,
-			double freqOffset);
+    void basebandGenerator(unsigned prn, fftwVector &basebandCode, double freqOffset);
 
-	SearchResult search(std::vector<fftwVector> &searchData,
-			unsigned prn,
-			unsigned corrCount,
-			double freqStart,
-			double freqStop,
-			double freqStep);
+    SearchResult search(std::vector<fftwVector> &searchData, unsigned prn, unsigned corrCount, double freqStart,
+            double freqStop, double freqStep);
 
-	Vector3d posECEF_;
+    Vector3d posECEF_;
 
-	double fs_;
+    double fs_;
 
-	std::queue<fftwVector> input_;
+    std::queue<fftwVector> input_;
 
-	FFT fft_;
+    FFT fft_;
 
-	atomic_bool run_;
+    atomic_bool run_;
 
-	std::list<TrackingChannel*> channels_;
+    std::list<TrackingChannel*> channels_;
 
-	double clockOffset_;
+    double clockOffset_;
 
-	std::thread signalProcessor_;
+    std::thread signalProcessor_;
 };
 
 #endif /* SRC_SDGPSR_H_ */

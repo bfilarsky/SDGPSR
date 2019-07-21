@@ -16,30 +16,30 @@ using std::endl;
 
 class TrackingChannel {
 public:
-	TrackingChannel(double fs, unsigned prn, SearchResult searchResult);
+    TrackingChannel(double fs, unsigned prn, SearchResult searchResult);
 
-	unsigned prn(void);
+    unsigned prn(void);
 
-	bool processSamples(fftwVector trackingData);
+    bool processSamples(fftwVector trackingData);
 
-	void sync(void);
+    void sync(void);
 
-	double transmitTime(void);
+    double transmitTime(void);
 
-	Vector3d satellitePosition(double timeOfWeek);
+    Vector3d satellitePosition(double timeOfWeek);
 
-	complex<double> latLong(double timeOfWeek);
+    complex<double> latLong(double timeOfWeek);
 
-	State state(void);
+    State state(void);
 
-	virtual ~TrackingChannel();
+    virtual ~TrackingChannel();
 
 private:
-	std::list<SignalTracker*> signalTrackers_;
+    std::list<SignalTracker*> signalTrackers_;
 
-	unsigned inputPackets_;
+    unsigned inputPackets_;
 
-	unsigned prn_;
+    unsigned prn_;
 };
 
 #endif /* SRC_GPSSATELLITE_H_ */
