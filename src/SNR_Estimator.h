@@ -3,14 +3,17 @@
 
 #include <complex>
 
-using std::complex;
+/*
+ * Estimate the Signal/Noise ratio given an input carrier
+ */
 
 class SNR_Estimator {
 public:
     SNR_Estimator();
+
     virtual ~SNR_Estimator();
 
-    void input(complex<double> carrier);
+    void input(std::complex<double> carrier);
 
     double estimate(void);
 

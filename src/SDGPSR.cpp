@@ -4,9 +4,13 @@
 
 const double SEARCH_WINDOW_BANDWIDTH = 10e3;
 const double SEARCH_WINDOW_STEP_SIZE = 500.0;
+const double WGS84_SEMI_MAJOR_AXIS   = 6378137.0;
+const double WGS84_E_SQUARED       = 6.69437999014e-3;
 
-SDGPSR::SDGPSR(double fs, double clockOffset) : fs_(fs), fft_(fs_ * CA_CODE_TIME), run_(true), signalProcessor_(
-        &SDGPSR::signalProcessing, this) {
+SDGPSR::SDGPSR(double fs, double clockOffset) : fs_(fs),
+        fft_(fs_ * CA_CODE_TIME),
+        run_(true),
+        signalProcessor_(&SDGPSR::signalProcessing, this) {
     clockOffset_ = clockOffset;
     userEstimateEcefTime_ = Vector4d(0.0, 0.0, 0.0, 0.0);
     navSolutionStarted_ = false;
@@ -18,9 +22,14 @@ SDGPSR::~SDGPSR() {
     signalProcessor_.join();
 }
 
-void SDGPSR::basebandSignal(fftwVector &data) {
+void SDGPSR::basebandSignal(const fftwVector &data) {
     std::lock_guard<std::mutex> lock(ioMutex_);
     input_.push(data);
+}
+
+void SDGPSR::basebandSignal(fftwVector &&data) {
+    std::lock_guard<std::mutex> lock(ioMutex_);
+    input_.push(std::move(data));
 }
 
 bool SDGPSR::synced(void) {
@@ -28,8 +37,11 @@ bool SDGPSR::synced(void) {
     return !input_.size();
 }
 
-std::vector<double> SDGPSR::nonCoherentCorrelator(std::vector<fftwVector> &searchData, fftwVector &basebandCode,
-        unsigned corrCount) {
+/*
+ * Compute the circular correlation between searchData and basebandCode over a 1 ms interval corrCount times, and sum the magnitude
+ * of each result. This allows the integration over periods that cross nav-bit boundaries at the expense of SNR
+ */
+std::vector<double> SDGPSR::nonCoherentCorrelator(std::vector<fftwVector> &searchData, fftwVector &basebandCode, unsigned corrCount) {
     std::vector<double> result(basebandCode.size());
     fftwVector result_f(basebandCode.size());
 
@@ -48,19 +60,30 @@ std::vector<double> SDGPSR::nonCoherentCorrelator(std::vector<fftwVector> &searc
     return result;
 }
 
+/*
+ * Generate a replicated PRN code for the given prn and frequency offset
+ */
 void SDGPSR::basebandGenerator(unsigned prn, fftwVector &basebandCode, double freqOffset) {
     CaCode caCode(prn);
     basebandCode.resize(fs_ * CA_CODE_TIME);
     for (unsigned i = 0; i < basebandCode.size(); ++i) {
         double time = i / fs_;
-        int chip = caCode[time * CHIP_RATE] == 1 ? 1 : -1;
+        int chip = caCode[time * CHIP_RATE];
         double phase = 2.0 * M_PI * freqOffset * time;
         basebandCode[i] = std::complex<double>(chip * cos(phase), chip * sin(phase));
     }
 }
 
-SearchResult SDGPSR::search(std::vector<fftwVector> &searchData, unsigned prn, unsigned corrCount, double freqStart,
-        double freqStop, double freqStep) {
+/*
+ * Conduct a 2-d search for the given prn using the frequency-domain searchData for all chip offsets and frequencies
+ * between the start and stop at the given step size. The search will be conducted non-coherently using corrCount integrations
+ */
+SearchResult SDGPSR::search(std::vector<fftwVector> &searchData,
+        unsigned prn,
+        unsigned corrCount,
+        double freqStart,
+        double freqStop,
+        double freqStep) {
     unsigned freqWindowSize = abs((freqStart - freqStop) / freqStep) + 1;
     std::vector<std::vector<double>> searchWindow(freqWindowSize);
     fftwVector basebandCode;
@@ -89,6 +112,7 @@ SearchResult SDGPSR::search(std::vector<fftwVector> &searchData, unsigned prn, u
     for (unsigned i = 0; i < searchWindow.size(); ++i)
         output.write((char*) &searchWindow[i][0], searchWindow[i].size() * sizeof(searchWindow[i][0]));
 
+    //Calculate the statistics of the search pattern
     double mean = sum / (freqWindowSize * basebandCode.size());
     double accum = 0.0;
     for (unsigned freqWindow = 0; freqWindow < freqWindowSize; ++freqWindow)
@@ -97,6 +121,8 @@ SearchResult SDGPSR::search(std::vector<fftwVector> &searchData, unsigned prn, u
     double stdDev = sqrt(accum / (freqWindowSize * basebandCode.size() - 1));
     double maxAboveMeanStdDevs = (max - mean) / stdDev;
 
+    //If the largest value was at least SAT_FOUND_THRESH number of standard deviations above the mean value,
+    //consider the satellite to be found at that point
     SearchResult searchResult;
     if (maxAboveMeanStdDevs > SAT_FOUND_THRESH) {
         searchResult.found = true;
@@ -108,20 +134,27 @@ SearchResult SDGPSR::search(std::vector<fftwVector> &searchData, unsigned prn, u
     return searchResult;
 }
 
+/*
+ * Attempt to solve for user time and position. The solution will only be calculated if at least 4
+ * tracking channels have a full nav solution for the satellite (time, clock data, and ephemeris data)
+ */
 void SDGPSR::solve(void) {
     vector<pair<unsigned,Vector4d>> satPosAndTime;
     double maxTime = 0.0;
     for (auto &chan : channels_) {
         chan->sync();
-        double time = chan->transmitTime();
-        Vector3d position = chan->satellitePosition(time);
-        if (userEstimateEcefTime_[3] != 0.0) {
-            double tof = userEstimateEcefTime_[3] - time;
-            double earthRotation = -tof * OMEGA_EARTH;
-            position[0] = position[0] * cos(earthRotation) - position[1] * sin(earthRotation);
-            position[1] = position[0] * sin(earthRotation) + position[1] * cos(earthRotation);
-        }
-        if (position != Vector3d(0.0, 0.0, 0.0)) {
+        if (chan->state() == fullNav) {
+            double time = chan->transmitTime();
+            Vector3d position = chan->satellitePosition(time);
+            //If we already have some idea of the nav solution, we can account for
+            //the rotation of the earth between the time the satellite broadcast its signal
+            //and we received it
+            if (navSolutionStarted_) {
+                double tof = userEstimateEcefTime_[3] - time;
+                double earthRotation = -tof * OMEGA_EARTH;
+                position[0] = position[0] * cos(earthRotation) - position[1] * sin(earthRotation);
+                position[1] = position[0] * sin(earthRotation) + position[1] * cos(earthRotation);
+            }
             Vector4d temp;
             temp[0] = position.x();
             temp[1] = position.y();
@@ -129,7 +162,7 @@ void SDGPSR::solve(void) {
             temp[3] = time;
             if (time > maxTime)
                 maxTime = time;
-            satPosAndTime.push_back(pair<unsigned,Vector4d>(chan->prn(),temp));
+            satPosAndTime.emplace_back(chan->prn(),temp);
         }
     }
 
@@ -138,28 +171,33 @@ void SDGPSR::solve(void) {
             userEstimateEcefTime_[3] = maxTime + .08;
             navSolutionStarted_ = true;
         }
+        //Have over-determined system of equations residuals = H * userEstimateError, want to compute the least squares solution
+        //to get userEstimate.
+        //userEstimate += (H^T*H)^-1 * H^T*residuals.
         MatrixXd hMatrix(satPosAndTime.size(), 4);
-        VectorXd deltaPseudoranges(satPosAndTime.size());
+        VectorXd residuals(satPosAndTime.size());
         for (unsigned i = 0; i < satPosAndTime.size(); ++i) {
-            double xRangeEst = satPosAndTime[i].second.x() - userEstimateEcefTime_[0];
-            double yRangeEst = satPosAndTime[i].second.y() - userEstimateEcefTime_[1];
-            double zRangeEst = satPosAndTime[i].second.z() - userEstimateEcefTime_[2];
+            //Compute range, pseudorange, and the residual (error between the two)
+            double xRangeEst = satPosAndTime[i].second.x() - userEstimateEcefTime_.x();
+            double yRangeEst = satPosAndTime[i].second.y() - userEstimateEcefTime_.y();
+            double zRangeEst = satPosAndTime[i].second.z() - userEstimateEcefTime_.z();
             double rangeEstimate = sqrt(xRangeEst * xRangeEst + yRangeEst * yRangeEst + zRangeEst * zRangeEst);
-            double pseudorangeEst = (userEstimateEcefTime_[3] - satPosAndTime[i].second.w()) * SPEED_OF_LIGHT_MPS;
-            deltaPseudoranges(i) = rangeEstimate - pseudorangeEst;
+            double pseudorangeEst = (userEstimateEcefTime_.w() - satPosAndTime[i].second.w()) * SPEED_OF_LIGHT_MPS;
+            residuals(i) = rangeEstimate - pseudorangeEst;
 
-            if (!innovations_.count(satPosAndTime[i].first))
-                innovations_.insert(pair<unsigned,ofstream>(satPosAndTime[i].first, std::ofstream("innovationsPrn" + std::to_string(satPosAndTime[i].first) + ".bin")));
-            innovations_[satPosAndTime[i].first].write((char*) &userEstimateEcefTime_[3], sizeof(userEstimateEcefTime_[3]));
-            innovations_[satPosAndTime[i].first].write((char*) &rangeEstimate, sizeof(rangeEstimate));
-            innovations_[satPosAndTime[i].first].write((char*) &pseudorangeEst, sizeof(pseudorangeEst));
+            if (!residualsOutput_.count(satPosAndTime[i].first))
+                residualsOutput_.emplace(satPosAndTime[i].first, std::ofstream("residualsPrn" + std::to_string(satPosAndTime[i].first) + ".bin"));
+            residualsOutput_[satPosAndTime[i].first].write((char*) &userEstimateEcefTime_[3], sizeof(userEstimateEcefTime_[3]));
+            residualsOutput_[satPosAndTime[i].first].write((char*) &rangeEstimate, sizeof(rangeEstimate));
+            residualsOutput_[satPosAndTime[i].first].write((char*) &pseudorangeEst, sizeof(pseudorangeEst));
 
             hMatrix(i, 0) = xRangeEst / rangeEstimate;
             hMatrix(i, 1) = yRangeEst / rangeEstimate;
             hMatrix(i, 2) = zRangeEst / rangeEstimate;
             hMatrix(i, 3) = 1.0;
         }
-        Vector4d deltaEst = (hMatrix.transpose() * hMatrix).ldlt().solve(hMatrix.transpose() * deltaPseudoranges);
+        //User cholesky decomposition solver to solve for the delta estimate
+        Vector4d deltaEst = (hMatrix.transpose() * hMatrix).ldlt().solve(hMatrix.transpose() * residuals);
         userEstimateEcefTime_[0] += deltaEst[0];
         userEstimateEcefTime_[1] += deltaEst[1];
         userEstimateEcefTime_[2] += deltaEst[2];
@@ -174,6 +212,7 @@ void SDGPSR::signalProcessing() {
     const unsigned CORR_COUNT = 128;
     std::vector<fftwVector> searchData(CORR_COUNT);
     for (unsigned i = 0; i < CORR_COUNT; ++i) {
+        //Wait for available data
         while (1) {
             ioMutex_.lock();
             size_t inputSize = input_.size();
@@ -184,6 +223,7 @@ void SDGPSR::signalProcessing() {
                 return;
             usleep(1e3);
         }
+        //Once data is available, fft it and output it the search buffer
         ioMutex_.lock();
         searchData[i].resize(input_.front().size());
         fft_.forward(&input_.front()[0], &searchData[i][0]);
@@ -193,10 +233,14 @@ void SDGPSR::signalProcessing() {
 
     //Using the FFT'd data, search for all PRNs
     for (unsigned prn = 1; prn <= 32; ++prn) {
-        SearchResult searchResult = search(searchData, prn, CORR_COUNT, clockOffset_ - SEARCH_WINDOW_BANDWIDTH / 2.0,
-                clockOffset_ + SEARCH_WINDOW_BANDWIDTH / 2.0, SEARCH_WINDOW_STEP_SIZE);
+        SearchResult searchResult = search(searchData,
+                prn,
+                CORR_COUNT,
+                clockOffset_ - SEARCH_WINDOW_BANDWIDTH / 2.0,
+                clockOffset_ + SEARCH_WINDOW_BANDWIDTH / 2.0,
+                SEARCH_WINDOW_STEP_SIZE);
         if (searchResult.found) {
-            channels_.push_back(std::unique_ptr<TrackingChannel>(new TrackingChannel(fs_, prn, searchResult)));
+            channels_.emplace_back(new SignalTracker(fs_, prn, searchResult));
         }
     }
 
@@ -246,14 +290,31 @@ Vector3d SDGPSR::positionECEF(void){
 }
 
 Vector3d SDGPSR::positionLLA(void){
-    //TODO: Make this the WGS84 conversion
-    std::lock_guard<std::mutex> lock(ioMutex_);
-    double lat = atan2(userEstimateEcefTime_.z(), sqrt(userEstimateEcefTime_.x() * userEstimateEcefTime_.x() + userEstimateEcefTime_.y() * userEstimateEcefTime_.y())) * 180.0 / M_PI;
-    double lon = atan2(userEstimateEcefTime_.y(), userEstimateEcefTime_.x()) * 180.0 / M_PI;
-    return Vector3d(lat, lon, 0.0);
+    Vector3d posECEF          = positionECEF();
+    if (posECEF == Vector3d(0.0,0.0,0.0))
+        return posECEF;
+    double longitude          = atan2(posECEF.y(), posECEF.x());
+    double xyPlaneRadius      = sqrt(posECEF.x() * posECEF.x() + posECEF.y() * posECEF.y());
+    double geocentricLatitude = atan2(xyPlaneRadius, posECEF.z());
+
+    double geodeticLatitude   = geocentricLatitude;
+    double height             = 0.0;
+
+    while (true){
+        double oldGeodeticLatitude = geodeticLatitude;
+        double sinGeodetic         = sin(geodeticLatitude);
+        double radiusOfCurvature   = WGS84_SEMI_MAJOR_AXIS / sqrt(1.0 - WGS84_E_SQUARED * sinGeodetic * sinGeodetic);
+        height                     = xyPlaneRadius/cos(geodeticLatitude) - radiusOfCurvature;
+        geodeticLatitude           = atan(posECEF.z() / (xyPlaneRadius * (1 - WGS84_E_SQUARED * radiusOfCurvature / (radiusOfCurvature + height))));
+        //Want values to converge to 6 decimal places, or < 6 inches
+        if (fabs(oldGeodeticLatitude - geodeticLatitude) < 1e-6)
+            break;
+    }
+
+    return Vector3d(geodeticLatitude * 180.0 / M_PI, longitude * 180.0 / M_PI, height);
 }
 
-double SDGPSR::userTimeSecOfWeek(void){
+double SDGPSR::timeOfWeek(void){
     std::lock_guard<std::mutex> lock(ioMutex_);
     return userEstimateEcefTime_.w();
 }

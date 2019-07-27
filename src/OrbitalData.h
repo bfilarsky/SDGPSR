@@ -14,6 +14,10 @@ const double GPS_PI = 3.1415926535898;
 const double SEMI_CIRCLE_TO_RAD = GPS_PI;
 const double WORD_PERIOD = 0.6;
 
+/*
+ * ClockData holds all of the required parameters from Subframe 1
+ */
+
 struct ClockData {
     unsigned weekNumber_;
     unsigned IODC_;
@@ -35,6 +39,10 @@ struct ClockData {
         valid_ = false;
     }
 };
+
+/*
+ * EphemData holds all of the required parameters from Subframes 2 & 3
+ */
 
 struct EphemData {
     EphemData() {
@@ -80,16 +88,33 @@ struct EphemData {
     bool valid_;
 };
 
+/*
+ * The orbital data class takes in LNAV words and extracts all of the required data from them. The critical information -
+ * clock data and ephemeris data - is on subframes 1-3. Subframes 4 & 5 have Almanac, Ionospheric delays, and other less critical
+ * information. At the moment, only subframes 1-3 are parsed. Once subframes 1-3 have been downloaded, the satellite ECEF position
+ * can be calculated for any given time of week.
+ *
+ * |  Subframe 1  |  Subframe 2  |  Subframe 3  |  Subframe 4  |  Subframe 5  |
+ * |                                  Frame                                   |
+ */
+
 class OrbitalData {
 public:
     OrbitalData();
+
     virtual ~OrbitalData();
 
-    double currentNavWordTimeOfWeek(void);
+    //Time of week at the end of the last Nav-Word that was processed
+    //Return -1 if time has not been determined yet
+    double currentNavWordTimeOfWeek(void) const;
 
-    bool process(const LNAV_Word &word);
+    void process(const LNAV_Word &word);
 
-    Vector3d satellitePosition(double timeOfWeek);
+    //WGS-84 ECEF position of satellite at time of week.
+    //Returns (0,0,0) if all subframes have not been downloaded yet
+    Vector3d satellitePosition(double timeOfWeek) const;
+
+    bool valid(void) const;
 
 private:
     void processSubframe1(const vector<LNAV_Word> &words);
@@ -98,16 +123,20 @@ private:
 
     void processSubframe3(const vector<LNAV_Word> &words);
 
+    //Build up the words until a full subframe has been downloaded
     vector<LNAV_Word> words_;
 
+    //Time of week of most recent subframe (even the skipped ones)
     int currentTow_;
 
-    bool validSubframe_;
-
+    //Since the ephemeris is split between two subframes, when there is a data
+    //update we need to push that into a separate ephemeris struct so that data
+    //isn't split between sets
     EphemData currentEphemeris_;
 
     EphemData nextEphemeris_;
 
+    //Since clock data is all on one subframe, it can be updated in one go
     ClockData clockData_;
 };
 

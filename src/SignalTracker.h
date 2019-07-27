@@ -19,13 +19,15 @@
 #include "LockDetector.h"
 #include "CodeLockDetector.h"
 
-using std::cout;
-using std::endl;
-
 const double CORR_OFFSET = CHIP_TIME / 2.0;
 
 enum State {
-    lossOfLock, closingCarrierFLL, closingCarrierPLL, findingNavBitEdge, fullTrack
+    lossOfLock,
+    closingCarrierFLL,
+    closingCarrierPLL,
+    findingNavBitEdge,
+    fullTrack,
+    fullNav
 };
 
 struct SearchResult {
@@ -42,31 +44,44 @@ struct SearchResult {
     }
 };
 
+/*
+ * Signal tracker is the heart of the receiver - one of these tracks each satellite. This class is responsible for the
+ * majority of the signal processing work that SDGPSR does. This class maintains its own thread to process all of the
+ * data passed to it
+ */
+
 class SignalTracker {
 public:
-    SignalTracker(double fs, unsigned prn, SearchResult searchResult, double searchFreqOffset);
-
-    unsigned prn(void);
-
-    bool processSamples(fftwVector trackingData);
-
-    void sync(void);
-
-    double transmitTime(void);
-
-    Vector3d satellitePosition(double timeOfWeek);
-
-    complex<double> latLong(double timeOfWeek);
-
-    State state(void);
-
-    double CNoEst(void);
+    SignalTracker(double fs, unsigned prn, SearchResult searchResult);
 
     virtual ~SignalTracker();
 
+    //PRN of satellite being tracked
+    unsigned prn(void);
+
+    //Copy data into queue for processing
+    bool processSamples(fftwVector trackingData);
+
+    //Blocking call that returns when the channel has processed all data passed to it
+    void sync(void);
+
+    //Transmit time of last sample received
+    double transmitTime(void);
+
+    //WGS84 position of the satellite at the given GPS time of week
+    Vector3d satellitePosition(double timeOfWeek);
+
+    //Navigation state of signal tracker
+    State state(void);
+
+    //Carrier/Noise ratio estimate (linear)
+    double CNoEst(void);
+
 private:
-    std::complex<double> coherentCorrelator(std::complex<double> *data, double chipFreqOffset, double timeOffset,
-            unsigned intervals);
+    std::complex<double> coherentCorrelator(std::complex<double> *data,
+                                            double chipFreqOffset,
+                                            double timeOffset,
+                                            unsigned intervals);
 
     void frequencyShift(fftwVector &data, double frequencyShift_Hz);
 

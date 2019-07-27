@@ -1,10 +1,10 @@
 #include "CodeLockDetector.h"
 
-const double K1 = 0.0247;
-const unsigned LO = 240;
+const double LPF_FCUTOFF = .0039805;
+const unsigned OPTIMISTIC_THRESH = 240;
 
-CodeLockDetector::CodeLockDetector() : earlyLPF_(K1), promptLPF_(K1), lateLPF_(K1) {
-    pCount_ = 0;
+CodeLockDetector::CodeLockDetector() : earlyLPF_(LPF_FCUTOFF), promptLPF_(LPF_FCUTOFF), lateLPF_(LPF_FCUTOFF) {
+    optimisticCount_ = 0;
 }
 
 CodeLockDetector::~CodeLockDetector() {
@@ -17,11 +17,11 @@ void CodeLockDetector::error(double magEarly, double magPrompt, double magLate) 
     double late = lateLPF_.iterate(magLate);
 
     if (early > prompt || late > prompt)
-        ++pCount_;
+        ++optimisticCount_;
     else
-        pCount_ = 0;
+        optimisticCount_ = 0;
 }
 
 bool CodeLockDetector::optimisticLock(void) {
-    return pCount_ < LO;
+    return optimisticCount_ < OPTIMISTIC_THRESH;
 }

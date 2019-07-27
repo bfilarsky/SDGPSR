@@ -10,8 +10,7 @@ CoherentCorrelator::CoherentCorrelator(double fs, unsigned prn, bool recordOn) :
 }
 
 CoherentCorrelator::~CoherentCorrelator() {
-    if (recorderOn_)
-        recorder_.close();
+
 }
 
 double CoherentCorrelator::integrate(fftwVector &data, double codeFreqOffset, double timeOffset,
@@ -35,9 +34,7 @@ double CoherentCorrelator::integrate(fftwVector &data, double codeFreqOffset, do
             integrationCount_ = 0;
         }
 
-        int chip = caCode_[chipNumber] == 1 ? 1 : -1;
-        currentIntegration_ += data[i] * std::complex<double>(chip, 0.0);
-        std::complex<double> rec(chip, 0.0);
+        currentIntegration_ += data[i] * std::complex<double>(caCode_[chipNumber], 0.0);
     }
 
     if (ready)
@@ -56,10 +53,10 @@ std::complex<double> CoherentCorrelator::dump(void) {
     return retval;
 }
 
-std::complex<double> CoherentCorrelator::val(void) {
+std::complex<double> CoherentCorrelator::val(void) const {
     return currentIntegration_;
 }
 
-double CoherentCorrelator::integrationTime(void) {
+double CoherentCorrelator::integrationTime(void) const {
     return integrationCount_ * 1e-3;
 }

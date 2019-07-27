@@ -2,10 +2,19 @@
 #include <unistd.h>
 
 const double CARRIER_CODE_SF = 1.023 / 1575.42;
+const double LPF_FCUTOFF = .0039805;
 
-SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult, double searchFreqOffset) : runThread_(
-        true), synced_(false), early_(fs, prn), prompt_(fs, prn, true), late_(fs, prn), carrierCorrelator_(fs, prn), carrierPhaseLPF_(
-        0.0247), carrierFreqLPF_(0.0247), processingThread_(&SignalTracker::threadFunction, this) {
+SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult) :
+                                     runThread_(true),
+                                     synced_(false),
+                                     early_(fs, prn),
+                                     prompt_(fs, prn, true),
+                                     late_(fs, prn),
+                                     carrierCorrelator_(fs, prn),
+                                     navBitEdgeDetector_(5),
+                                     carrierPhaseLPF_(LPF_FCUTOFF),
+                                     carrierFreqLPF_(LPF_FCUTOFF),
+                                     processingThread_(&SignalTracker::threadFunction, this) {
     prn_ = prn;
     fs_ = fs;
 
@@ -13,19 +22,17 @@ SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult,
     processedPackets_ = 0;
 
     carrierPhase_ = 0.0;
-    carrierFreq_ = searchResult.baseBandFreq + searchFreqOffset;
+    carrierFreq_ = searchResult.baseBandFreq;
     codetime_ = searchResult.sampleOffset / fs_;
-    codeFreq_ = (searchResult.baseBandFreq + searchFreqOffset) * CARRIER_CODE_SF;
+    codeFreq_ = (searchResult.baseBandFreq) * CARRIER_CODE_SF;
     integrationLength_ = 1;
 
     lastCarrier_ = complex<double>(1.0, 0.0);
 
     state_ = closingCarrierFLL;
 
-    codeRecorder_.open("code" + std::to_string(prn) + '_' + std::to_string((int) searchFreqOffset) + ".bin",
-            std::ofstream::binary);
-    carrierRecorder_.open("carrier" + std::to_string(prn) + '_' + std::to_string((int) searchFreqOffset) + ".bin",
-            std::ofstream::binary);
+    codeRecorder_.open("code" + std::to_string(prn) +".bin", std::ofstream::binary);
+    carrierRecorder_.open("carrier" + std::to_string(prn) + ".bin", std::ofstream::binary);
 }
 
 SignalTracker::~SignalTracker() {
@@ -43,6 +50,7 @@ double SignalTracker::CNoEst(void) {
     return snrEstimator_.estimate() / (CA_CODE_TIME * integrationLength_);
 }
 
+//TODO: Refactor this function - could use some cleanup
 void SignalTracker::threadFunction(void) {
     while (runThread_) {
         fftwVector trackingData;
@@ -113,7 +121,14 @@ void SignalTracker::threadFunction(void) {
                     }
                 }
                 break;
+                //TODO: Handle drops from below states
             case fullTrack:
+                if (lnav_data_.valid())
+                    state_ = fullNav;
+                break;
+            case fullNav:
+                if (!lnav_data_.valid())
+                    state_ = fullTrack;
                 break;
         }
 
@@ -138,14 +153,14 @@ void SignalTracker::threadFunction(void) {
         carrierRecorder_.write((char*) &state, sizeof(state));
         double ilast = carrierFllLock_.lastInPhase();
         double qlast = carrierFllLock_.lastQuadPhase();
-        double p1 = carrierFllLock_.pCount1();
-        double p2 = carrierFllLock_.pCount2();
+        double pesCount = carrierFllLock_.pessimisticCount();
+        double optCount = carrierFllLock_.optimisticCount();
         double opt = carrierFllLock_.optimisticLock();
         double pes = carrierFllLock_.pessimisticLock();
         carrierRecorder_.write((char*) &ilast, sizeof(ilast));
         carrierRecorder_.write((char*) &qlast, sizeof(qlast));
-        carrierRecorder_.write((char*) &p1, sizeof(p1));
-        carrierRecorder_.write((char*) &p2, sizeof(p2));
+        carrierRecorder_.write((char*) &pesCount, sizeof(pesCount));
+        carrierRecorder_.write((char*) &optCount, sizeof(optCount));
         carrierRecorder_.write((char*) &opt, sizeof(opt));
         carrierRecorder_.write((char*) &pes, sizeof(pes));
 
@@ -210,14 +225,6 @@ Vector3d SignalTracker::satellitePosition(double timeOfWeek) {
     if (timeOfWeek == -1.0)
         return Vector3d(0.0, 0.0, 0.0);
     return lnav_data_.satellitePosition(timeOfWeek);
-}
-
-complex<double> SignalTracker::latLong(double timeOfWeek) {
-    Vector3d ecef = lnav_data_.satellitePosition(timeOfWeek);
-    complex<double> retVal;
-    retVal.real(atan2(ecef.z(), sqrt(ecef.x() * ecef.x() + ecef.y() * ecef.y())) * 180.0 / M_PI);
-    retVal.imag(atan2(ecef.y(), ecef.x()) * 180.0 / M_PI);
-    return retVal;
 }
 
 bool SignalTracker::processSamples(fftwVector trackingData) {

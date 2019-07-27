@@ -1,9 +1,11 @@
 #include "LNAV_Word.h"
 
-LNAV_Word::LNAV_Word(const deque<int> &word, unsigned lastWordBit29, unsigned lastWordBit30, bool inverted) {
+LNAV_Word::LNAV_Word(const std::deque<int> &word, unsigned lastWordBit29, unsigned lastWordBit30) {
     word_.resize(WORD_SIZE);
     for (unsigned i = 0; i < WORD_SIZE; ++i) {
-        word_[i] = (word[i] == 1) ^ inverted;
+        //Convert input word from +1/-1 to 1/0
+        word_[i] = (word[i] == 1);
+        //If bit 30 of the last word was 1, flip all of the bits
         if (i < SRC_BITS)
             word_[i] ^= lastWordBit30;
     }
@@ -18,8 +20,10 @@ bool LNAV_Word::valid(void) const {
     return valid_;
 }
 
-unsigned LNAV_Word::operator [](size_t idx) const {
-    return word_[idx];
+unsigned LNAV_Word::bit(size_t idx) const {
+    if (idx == 0 || idx > WORD_SIZE)
+        throw std::range_error("Word bit index range error");
+    return word_[idx-1];
 }
 
 unsigned LNAV_Word::getUnsignedValue(unsigned start, unsigned length) const {
@@ -31,16 +35,17 @@ unsigned LNAV_Word::getUnsignedValue(unsigned start, unsigned length) const {
 
 int LNAV_Word::getSignedValue(unsigned start, unsigned length) const {
     int val = 0;
+    //If the first bit is a 1, the value is negative. Set all leading bits of the return value to 1
     if (word_[start - 1])
         for (unsigned i = 0; i < 32 - length; ++i)
             val |= 1 << (31 - i);
     for (unsigned i = 0; i < length; ++i) {
         val |= word_[i + start - 1] << (length - i - 1);
     }
-
     return val;
 }
 
+//LNAV word checksum calculation per IS-GPS-200
 bool LNAV_Word::computeChecksum(unsigned lastWordBit29, unsigned lastWordBit30) {
     unsigned bit25 = lastWordBit29 ^ word_[0] ^ word_[1] ^ word_[2] ^ word_[4] ^ word_[5] ^ word_[9] ^ word_[10]
             ^ word_[11] ^ word_[12] ^ word_[13] ^ word_[16] ^ word_[17] ^ word_[19] ^ word_[22];

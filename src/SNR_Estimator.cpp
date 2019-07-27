@@ -11,7 +11,7 @@ SNR_Estimator::~SNR_Estimator() {
 
 }
 
-void SNR_Estimator::input(complex<double> carrier) {
+void SNR_Estimator::input(std::complex<double> carrier) {
     double norm2 = carrier.real() * carrier.real() + carrier.imag() * carrier.imag();
     norm2_ += norm2;
     norm4_ += norm2 * norm2;

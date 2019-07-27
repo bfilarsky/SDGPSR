@@ -8,9 +8,12 @@
 #include <vector>
 #include "OrbitalData.h"
 
-const double BIT_PERIOD = 0.02;
+/*
+ * Class for reading in the LNAV bitstream. This class takes bits in, determines the start of a subframe, and passes valid words
+ * to the Orbital Data class for processing
+ */
 
-using namespace std;
+const double BIT_PERIOD = 0.02;
 
 class LNAV_Data {
 public:
@@ -18,16 +21,21 @@ public:
 
     virtual ~LNAV_Data();
 
+    //Pass a nav bit in for processing. Flip bits will be set to true if it determines the bits are inverted
     void navBit(int bit, bool &flipBits);
 
-    double timeOfLastNavBit(void);
+    //GPS Time of Week at the end of the last nav bit
+    double timeOfLastNavBit(void) const;
 
-    Vector3d satellitePosition(double timeOfWeek);
+    //ECEF position of the satellite at the given time of week
+    Vector3d satellitePosition(double timeOfWeek) const;
+
+    bool valid(void) const;
 
 private:
-    bool isTlmWord(deque<int> &bits, bool &flipBits);
+    bool isTlmWord(std::deque<int> &bits, bool &flipBits);
 
-    deque<int> bitHistory_;
+    std::deque<int> bitHistory_;
 
     OrbitalData orbitalData_;
 

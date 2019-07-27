@@ -6,7 +6,13 @@
 #include <complex>
 #include "fftw_allocator.h"
 
+//Standard vector, except that it uses the fftw_allocator, which allocates memory that is aligned for SIMD acceleration
 typedef std::vector<std::complex<double>, fftw_allocator<std::complex<double>>> fftwVector;
+
+/*
+ * This class is just a container for the fftw3 library. It sets up the library on construction as needed for SDGPSR
+ * The functions allow FFTs and IFFTs to be completed both in-place and into a different location
+ */
 
 class FFT {
 public:

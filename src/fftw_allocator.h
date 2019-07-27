@@ -3,6 +3,10 @@
 
 #include <fftw3.h>
 
+/*
+ * Allocator that obeys special alignment restrictions in order to allow SIMD acceleration
+ */
+
 template<typename T>
 class fftw_allocator {
 public:

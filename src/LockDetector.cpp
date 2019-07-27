@@ -1,13 +1,13 @@
 #include "LockDetector.h"
 
-const double K1 = 0.0247;
-const double K2 = 1.5;
-const unsigned LP = 50;
-const unsigned LO = 240;
+const double LPF_FCUTOFF = .0039805;
+const double K2 = 1.5;    //In phase divisor
+const unsigned PESSIMISTIC_THRESH = 50;
+const unsigned OPTIMISTIC_THRESH = 240;
 
-LockDetector::LockDetector() : inPhaseLPF_(K1), quadPhaseLPF_(K1) {
-    pCount1_ = 0;
-    pCount2_ = 0;
+LockDetector::LockDetector() : inPhaseLPF_(LPF_FCUTOFF), quadPhaseLPF_(LPF_FCUTOFF) {
+    pessimisticCount_ = 0;
+    optimisticCount_ = 0;
     optimisticLock_ = false;
     pessimisticLock_ = false;
 }
@@ -16,46 +16,46 @@ LockDetector::~LockDetector() {
 
 }
 
-void LockDetector::error(complex<double> error) {
+void LockDetector::error(std::complex<double> error) {
     double A = inPhaseLPF_.iterate(fabs(error.real())) / K2;
     double B = quadPhaseLPF_.iterate(fabs(error.imag()));
     if (A > B) {
         optimisticLock_ = true;
-        pCount2_ = 0;
-        if (pCount1_ > LP)
+        optimisticCount_ = 0;
+        if (pessimisticCount_ > PESSIMISTIC_THRESH)
             pessimisticLock_ = true;
         else
-            ++pCount1_;
+            ++pessimisticCount_;
     } else {
         pessimisticLock_ = false;
-        pCount1_ = 0;
-        if (pCount2_ > LO)
+        pessimisticCount_ = 0;
+        if (optimisticCount_ > OPTIMISTIC_THRESH)
             optimisticLock_ = false;
         else
-            ++pCount2_;
+            ++optimisticCount_;
     }
 }
 
-bool LockDetector::optimisticLock(void) {
+bool LockDetector::optimisticLock(void) const {
     return optimisticLock_;
 }
 
-bool LockDetector::pessimisticLock(void) {
+bool LockDetector::pessimisticLock(void) const {
     return pessimisticLock_;
 }
 
-double LockDetector::lastInPhase(void) {
+double LockDetector::lastInPhase(void) const {
     return inPhaseLPF_.last();
 }
 
-double LockDetector::lastQuadPhase(void) {
+double LockDetector::lastQuadPhase(void) const {
     return quadPhaseLPF_.last();
 }
 
-unsigned LockDetector::pCount1(void) {
-    return pCount1_;
+unsigned LockDetector::pessimisticCount(void) const {
+    return pessimisticCount_;
 }
 
-unsigned LockDetector::pCount2(void) {
-    return pCount2_;
+unsigned LockDetector::optimisticCount(void) const {
+    return optimisticCount_;
 }
