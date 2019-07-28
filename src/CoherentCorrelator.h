@@ -13,7 +13,7 @@
 
 class CoherentCorrelator {
 public:
-    CoherentCorrelator(double fs, unsigned prn, bool recordOn = false);
+    CoherentCorrelator(double fs, unsigned prn);
 
     virtual ~CoherentCorrelator();
 
@@ -45,9 +45,6 @@ private:
     unsigned integrationCount_;
 
     int lastCaChipNum_;
-
-    bool recorderOn_;
-    std::ofstream recorder_;
 };
 
 #endif /* SRC_COHERENTCORRELATOR_H_ */

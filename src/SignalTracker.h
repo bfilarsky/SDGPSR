@@ -60,7 +60,7 @@ public:
     unsigned prn(void);
 
     //Copy data into queue for processing
-    bool processSamples(fftwVector trackingData);
+    State processSamples(fftwVector trackingData);
 
     //Blocking call that returns when the channel has processed all data passed to it
     void sync(void);
@@ -130,8 +130,10 @@ private:
 
     State state_;
 
+#ifdef DEBUG_FILES
     std::ofstream codeRecorder_;
     std::ofstream carrierRecorder_;
+#endif
 
     std::thread processingThread_;
 };

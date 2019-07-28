@@ -1,9 +1,6 @@
 #include "CoherentCorrelator.h"
 
-CoherentCorrelator::CoherentCorrelator(double fs, unsigned prn, bool recordOn) : caCode_(prn), fs_(fs) {
-    recorderOn_ = recordOn;
-    if (recorderOn_)
-        recorder_.open("correlator.bin", std::ofstream::binary);
+CoherentCorrelator::CoherentCorrelator(double fs, unsigned prn) : caCode_(prn), fs_(fs) {
     ready_ = false;
     integrationCount_ = 0;
     lastCaChipNum_ = 0;

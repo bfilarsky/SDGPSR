@@ -1,5 +1,8 @@
 SDGPSR is a project to use a Software-Defined Radio and PC as a GPS Receiver. The codebase leverages *Understanding GPS: Principles and Applications, Kaplan and Hegarty* as well as IS-GPS-200J.
 
+### Building and running the example
+You will need the fftw3 library in order to build the example. There are 4 .dat files that contain data that was acquired with a HackRF One SDR - these will be concatenated into a single file (they are split since github has a 100 MB file size restriction). Running the program will show the process of the signal tracking and finally give the navigation solution in Lat/Lon/Alt.
+
 ### Implementation
 The receiver takes in data at 1 ms intervals (the length of the C/A sequence), and conducts the following steps in order:
 1. Search the sky for all 32 GPS Satellites. A 2-dimensional search grid is created over code-phase and frequency offset, with a 10 KHz search window and 500 Hz increments. For each frequency, a circular correlation function is computed in the frequency domain, and the results are non-coherently integrated in 1 ms intervals across 128 ms.

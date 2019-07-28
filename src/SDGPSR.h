@@ -59,6 +59,10 @@ public:
     //Get user GPS time of week (s)
     double timeOfWeek(void);
 
+    std::vector<std::pair<unsigned, State>> trackingStatus();
+
+    bool navSolution(void);
+
 private:
     void solve(void);
 
@@ -95,8 +99,10 @@ private:
 
     std::thread signalProcessor_;
 
+#ifdef DEBUG_FILES
     ofstream userEstimates_;
     std::unordered_map<unsigned,ofstream> residualsOutput_;
+#endif
 };
 
 #endif /* SRC_SDGPSR_H_ */

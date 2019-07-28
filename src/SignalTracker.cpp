@@ -8,7 +8,7 @@ SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult)
                                      runThread_(true),
                                      synced_(false),
                                      early_(fs, prn),
-                                     prompt_(fs, prn, true),
+                                     prompt_(fs, prn),
                                      late_(fs, prn),
                                      carrierCorrelator_(fs, prn),
                                      navBitEdgeDetector_(5),
@@ -31,15 +31,15 @@ SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult)
 
     state_ = closingCarrierFLL;
 
+#ifdef DEBUG_FILES
     codeRecorder_.open("code" + std::to_string(prn) +".bin", std::ofstream::binary);
     carrierRecorder_.open("carrier" + std::to_string(prn) + ".bin", std::ofstream::binary);
+#endif
 }
 
 SignalTracker::~SignalTracker() {
     runThread_ = false;
     processingThread_.join();
-    codeRecorder_.close();
-    carrierRecorder_.close();
 }
 
 State SignalTracker::state(void) {
@@ -74,7 +74,6 @@ void SignalTracker::threadFunction(void) {
         carrierCorrelator_.integrate(trackingData, codeFreq_, codetime_, 1);
         std::complex<double> carrier = carrierCorrelator_.dump();
         snrEstimator_.input(carrier);
-        double CN0 = snrEstimator_.estimate() / (CA_CODE_TIME);
 
         complex<double> carrierError = carrier / lastCarrier_;
         double carrierErrorPhase = arg(carrierError);
@@ -139,9 +138,11 @@ void SignalTracker::threadFunction(void) {
         codetime_ -= costasLoopPhaseCorrection / (2.0 * M_PI * 1.57542e9) * CARRIER_CODE_SF;
         lastCarrier_ *= complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
 
+#ifdef DEBUG_FILES
         double state = state_;
         double meanCarrierPhaseErr = carrierPhaseLPF_.last();
         double meanCarrierFreqErr = carrierFreqLPF_.last();
+        double CN0 = snrEstimator_.estimate() / (CA_CODE_TIME);
         carrierRecorder_.write((char*) &timeSinceStart_, sizeof(timeSinceStart_));
         carrierRecorder_.write((char*) &carrierError, sizeof(carrier));
         carrierRecorder_.write((char*) &costasLoopErrorPhase, sizeof(costasLoopErrorPhase));
@@ -163,6 +164,7 @@ void SignalTracker::threadFunction(void) {
         carrierRecorder_.write((char*) &optCount, sizeof(optCount));
         carrierRecorder_.write((char*) &opt, sizeof(opt));
         carrierRecorder_.write((char*) &pes, sizeof(pes));
+#endif
 
         bool ready = true;
         early_.integrate(trackingData, codeFreq_, codetime_ - CORR_OFFSET, integrationLength_);
@@ -183,6 +185,7 @@ void SignalTracker::threadFunction(void) {
             codetime_ -= 0.04 * codeErrorTime;
             codeFreq_ -= 0.04 * codeErrorChips;
 
+#ifdef DEBUG_FILES
             double lpEarly = codeLock_.early();
             double lpPrompt = codeLock_.prompt();
             double lpLate = codeLock_.late();
@@ -195,6 +198,7 @@ void SignalTracker::threadFunction(void) {
             codeRecorder_.write((char*) &lpEarly, sizeof(lpEarly));
             codeRecorder_.write((char*) &lpPrompt, sizeof(lpPrompt));
             codeRecorder_.write((char*) &lpLate, sizeof(lpLate));
+#endif
 
             if (integrationLength_ == 20) {
                 bool flipBits;
@@ -227,11 +231,11 @@ Vector3d SignalTracker::satellitePosition(double timeOfWeek) {
     return lnav_data_.satellitePosition(timeOfWeek);
 }
 
-bool SignalTracker::processSamples(fftwVector trackingData) {
+State SignalTracker::processSamples(fftwVector trackingData) {
     trackingDataAccess_.lock();
     trackingData_.push_back(std::move(trackingData));
     trackingDataAccess_.unlock();
-    return state_ != lossOfLock;
+    return state_;
 }
 
 void SignalTracker::sync(void) {

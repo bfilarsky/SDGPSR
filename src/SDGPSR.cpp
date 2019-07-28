@@ -14,7 +14,10 @@ SDGPSR::SDGPSR(double fs, double clockOffset) : fs_(fs),
     clockOffset_ = clockOffset;
     userEstimateEcefTime_ = Vector4d(0.0, 0.0, 0.0, 0.0);
     navSolutionStarted_ = false;
+
+#ifdef DEBUG_FILES
     userEstimates_.open("userEstimates.bin", std::ofstream::binary);
+#endif
 }
 
 SDGPSR::~SDGPSR() {
@@ -107,10 +110,12 @@ SearchResult SDGPSR::search(std::vector<fftwVector> &searchData,
         }
     }
 
+#ifdef DEBUG_FILES
     std::string filename = "prn" + std::to_string(prn) + "searchWindow" + std::to_string((int) freqStep) + ".bin";
     std::ofstream output(filename, std::ofstream::binary);
     for (unsigned i = 0; i < searchWindow.size(); ++i)
         output.write((char*) &searchWindow[i][0], searchWindow[i].size() * sizeof(searchWindow[i][0]));
+#endif
 
     //Calculate the statistics of the search pattern
     double mean = sum / (freqWindowSize * basebandCode.size());
@@ -185,11 +190,13 @@ void SDGPSR::solve(void) {
             double pseudorangeEst = (userEstimateEcefTime_.w() - satPosAndTime[i].second.w()) * SPEED_OF_LIGHT_MPS;
             residuals(i) = rangeEstimate - pseudorangeEst;
 
+#ifdef DEBUG_FILES
             if (!residualsOutput_.count(satPosAndTime[i].first))
                 residualsOutput_.emplace(satPosAndTime[i].first, std::ofstream("residualsPrn" + std::to_string(satPosAndTime[i].first) + ".bin"));
             residualsOutput_[satPosAndTime[i].first].write((char*) &userEstimateEcefTime_[3], sizeof(userEstimateEcefTime_[3]));
             residualsOutput_[satPosAndTime[i].first].write((char*) &rangeEstimate, sizeof(rangeEstimate));
             residualsOutput_[satPosAndTime[i].first].write((char*) &pseudorangeEst, sizeof(pseudorangeEst));
+#endif
 
             hMatrix(i, 0) = xRangeEst / rangeEstimate;
             hMatrix(i, 1) = yRangeEst / rangeEstimate;
@@ -203,7 +210,9 @@ void SDGPSR::solve(void) {
         userEstimateEcefTime_[2] += deltaEst[2];
         userEstimateEcefTime_[3] += deltaEst[3] / SPEED_OF_LIGHT_MPS;
 
+#ifdef DEBUG_FILES
         userEstimates_.write((char*) &userEstimateEcefTime_, sizeof(userEstimateEcefTime_));
+#endif
     }
 }
 
@@ -265,10 +274,8 @@ void SDGPSR::signalProcessing() {
                     return;
                 usleep(1e3);
             }
-            ioMutex_.lock();
-            auto data = input_.front();
-            ioMutex_.unlock();
-            if (!(*chanIterator)->processSamples(data)) {
+            std::lock_guard<std::mutex> lock(ioMutex_);
+            if ((*chanIterator)->processSamples(input_.front()) == lossOfLock) {
                 chanIterator = channels_.erase(chanIterator);
             } else
                 ++chanIterator;
@@ -317,4 +324,16 @@ Vector3d SDGPSR::positionLLA(void){
 double SDGPSR::timeOfWeek(void){
     std::lock_guard<std::mutex> lock(ioMutex_);
     return userEstimateEcefTime_.w();
+}
+
+std::vector<std::pair<unsigned, State>> SDGPSR::trackingStatus(){
+    std::vector<std::pair<unsigned, State>> status;
+    std::lock_guard<std::mutex> lock(ioMutex_);
+    for (auto &channel : channels_)
+        status.emplace_back(channel->prn(), channel->state());
+    return status;
+}
+
+bool SDGPSR::navSolution(void){
+    return navSolutionStarted_;
 }
