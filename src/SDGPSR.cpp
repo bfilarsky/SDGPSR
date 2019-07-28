@@ -5,15 +5,16 @@
 const double SEARCH_WINDOW_BANDWIDTH = 10e3;
 const double SEARCH_WINDOW_STEP_SIZE = 500.0;
 const double WGS84_SEMI_MAJOR_AXIS   = 6378137.0;
-const double WGS84_E_SQUARED       = 6.69437999014e-3;
-
+const double WGS84_E_SQUARED         = 6.69437999014e-3;
+const unsigned SEC_PER_WEEK          = 604800;
 SDGPSR::SDGPSR(double fs, double clockOffset) : fs_(fs),
         fft_(fs_ * CA_CODE_TIME),
         run_(true),
-        signalProcessor_(&SDGPSR::signalProcessing, this) {
+        signalProcessor_(&SDGPSR::threadFunction, this) {
     clockOffset_ = clockOffset;
     userEstimateEcefTime_ = Vector4d(0.0, 0.0, 0.0, 0.0);
     navSolutionStarted_ = false;
+    synced_ = true;
 
 #ifdef DEBUG_FILES
     userEstimates_.open("userEstimates.bin", std::ofstream::binary);
@@ -37,7 +38,7 @@ void SDGPSR::basebandSignal(fftwVector &&data) {
 
 bool SDGPSR::synced(void) {
     std::lock_guard<std::mutex> lock(inputMutex_);
-    return !input_.size();
+    return synced_ && !input_.size();
 }
 
 /*
@@ -183,12 +184,16 @@ void SDGPSR::solve(void) {
         MatrixXd hMatrix(satPosAndTime.size(), 4);
         VectorXd residuals(satPosAndTime.size());
         for (unsigned i = 0; i < satPosAndTime.size(); ++i) {
+            //Handle case where the week rollover has happened for the user, but the received signal is from the previous week
+            double satelliteTime = satPosAndTime[i].second.w();
+            if (navSolutionStarted_ && userEstimateEcefTime_[3] < SEC_PER_WEEK / 2 && satelliteTime > SEC_PER_WEEK / 2)
+                satelliteTime -= SEC_PER_WEEK;
             //Compute range, pseudorange, and the residual (error between the two)
             double xRangeEst = satPosAndTime[i].second.x() - userEstimateEcefTime_.x();
             double yRangeEst = satPosAndTime[i].second.y() - userEstimateEcefTime_.y();
             double zRangeEst = satPosAndTime[i].second.z() - userEstimateEcefTime_.z();
             double rangeEstimate = sqrt(xRangeEst * xRangeEst + yRangeEst * yRangeEst + zRangeEst * zRangeEst);
-            double pseudorangeEst = (userEstimateEcefTime_.w() - satPosAndTime[i].second.w()) * SPEED_OF_LIGHT_MPS;
+            double pseudorangeEst = (userEstimateEcefTime_.w() - satelliteTime) * SPEED_OF_LIGHT_MPS;
             residuals(i) = rangeEstimate - pseudorangeEst;
 
 #ifdef DEBUG_FILES
@@ -218,7 +223,7 @@ void SDGPSR::solve(void) {
     }
 }
 
-void SDGPSR::signalProcessing() {
+void SDGPSR::threadFunction() {
     //FFT the first CORR_COUNT packets in order to conduct search
     const unsigned CORR_COUNT = 128;
     std::vector<fftwVector> searchData(CORR_COUNT);
@@ -232,8 +237,10 @@ void SDGPSR::signalProcessing() {
                 break;
             if (!run_)
                 return;
+            synced_ = true;
             usleep(1e3);
         }
+        synced_ = false;
         //Once data is available, fft it and output it the search buffer
         inputMutex_.lock();
         searchData[i].resize(input_.front().size());
@@ -275,10 +282,14 @@ void SDGPSR::signalProcessing() {
                     break;
                 if (!run_)
                     return;
+                synced_ = true;
                 usleep(1e3);
             }
-            std::lock_guard<std::mutex> lock(inputMutex_);
-            if ((*chanIterator)->processSamples(input_.front()) == lossOfLock) {
+            synced_ = false;
+            inputMutex_.lock();
+            State state = (*chanIterator)->processSamples(input_.front());
+            inputMutex_.unlock();
+            if (state == lossOfLock) {
                 std::lock_guard<std::mutex> lock(channelMutex_);
                 chanIterator = channels_.erase(chanIterator);
             } else
@@ -289,7 +300,7 @@ void SDGPSR::signalProcessing() {
         inputMutex_.unlock();
         if (navSolutionStarted_){
             std::lock_guard<std::mutex> lock(userEstMutex_);
-            userEstimateEcefTime_[3] += CA_CODE_TIME;
+            userEstimateEcefTime_[3] = fmod(userEstimateEcefTime_[3] + CA_CODE_TIME, SEC_PER_WEEK);
         }
         if (++trackingPacketCount % 100 == 0) {
             solve();

@@ -2,7 +2,7 @@
 #include <unistd.h>
 
 const double CARRIER_CODE_SF = 1.023 / 1575.42;
-const double LPF_FCUTOFF = .0039805;
+const double LPF_FCUTOFF     = .0039805;
 
 SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult) :
                                      runThread_(true),
@@ -51,7 +51,6 @@ double SignalTracker::CNoEst(void) {
     return snrEstimator_.estimate() / (CA_CODE_TIME * integrationLength_);
 }
 
-//TODO: Refactor this function - could use some cleanup
 void SignalTracker::threadFunction(void) {
     while (runThread_) {
         fftwVector trackingData;
@@ -80,14 +79,14 @@ void SignalTracker::threadFunction(void) {
 
         complex<double> carrierError = carrier / lastCarrier_;
         double carrierErrorPhase = arg(carrierError);
-        double carrierFreqHz = carrierErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
+        double carrierErrorFreqHz = carrierErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
 
         complex<double> costasLoopError = carrier.real() > 0.0 ? carrier : carrier * complex<double>(-1.0, 0.0);
         double costasLoopErrorPhase = arg(costasLoopError);
         double costasLoopFreqError = costasLoopErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
 
         double costasLoopPhaseCorrection = state_ == closingCarrierFLL ? 0.0 : -costasLoopErrorPhase / 5.0;
-        double fllFreqError = state_ == closingCarrierFLL ? carrierFreqHz : costasLoopFreqError;
+        double fllFreqError = state_ == closingCarrierFLL ? carrierErrorFreqHz : costasLoopFreqError;
         double fllGain = state_ == closingCarrierFLL ? .01 : .001;
 
         lastCarrier_ = carrier;

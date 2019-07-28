@@ -64,14 +64,22 @@ public:
     bool navSolution(void);
 
 private:
+    //Compute Nav Solution
     void solve(void);
 
-    void signalProcessing();
+    //Search for satellites, create Signal Trackers, then continuously pull data from input queue and
+    //send out to Signal Trackers for processing, then compute Nav Solution
+    void threadFunction();
 
+    //Compute corrCount iterations of a circular correlation between the frequency-domain searchData and time-domain basebandcode,
+    //returning the summed magnitides for each code offset
     std::vector<double> nonCoherentCorrelator(std::vector<fftwVector> &searchData, fftwVector &basebandCode, unsigned corrCount);
 
+    //Generate a prn sequence with the given baseband frequency
     void basebandGenerator(unsigned prn, fftwVector &basebandCode, double freqOffset);
 
+    //Conduct a 2-d search for the given prn using the frequency-domain searchData for all chip offsets and frequencies
+    //between the start and stop at the given step size. The search will be conducted non-coherently using corrCount integrations
     SearchResult search(std::vector<fftwVector> &searchData,
                         unsigned prn,
                         unsigned corrCount,
@@ -79,6 +87,7 @@ private:
                         double freqStop,
                         double freqStep);
 
+    //WGS84 ECEF position (m) in x-z, w is GPS time of week (s). w follows z in the vector
     Vector4d userEstimateEcefTime_;
     //Mutex should be locked any time a public function reads from userEstimateEcefTime_, and any time it is written to
     std::mutex userEstMutex_;
@@ -87,6 +96,7 @@ private:
 
     double fs_;
 
+    //Queue of 1-ms chunks of input data
     std::queue<fftwVector> input_;
     //Mutex should be locked any time a public function reads from input_, and any time it is modified
     std::mutex inputMutex_;
@@ -94,6 +104,8 @@ private:
     FFT fft_;
 
     atomic_bool run_;
+
+    atomic_bool synced_;
 
     std::list<std::unique_ptr<SignalTracker>> channels_;
     //Mutex should be locked any time a public function reads from channels_, and any time it is modified
