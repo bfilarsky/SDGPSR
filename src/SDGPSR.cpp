@@ -26,17 +26,17 @@ SDGPSR::~SDGPSR() {
 }
 
 void SDGPSR::basebandSignal(const fftwVector &data) {
-    std::lock_guard<std::mutex> lock(ioMutex_);
+    std::lock_guard<std::mutex> lock(inputMutex_);
     input_.push(data);
 }
 
 void SDGPSR::basebandSignal(fftwVector &&data) {
-    std::lock_guard<std::mutex> lock(ioMutex_);
+    std::lock_guard<std::mutex> lock(inputMutex_);
     input_.push(std::move(data));
 }
 
 bool SDGPSR::synced(void) {
-    std::lock_guard<std::mutex> lock(ioMutex_);
+    std::lock_guard<std::mutex> lock(inputMutex_);
     return !input_.size();
 }
 
@@ -173,6 +173,7 @@ void SDGPSR::solve(void) {
 
     if (satPosAndTime.size() >= 4) {
         if (!navSolutionStarted_){
+            std::lock_guard<std::mutex> lock(userEstMutex_);
             userEstimateEcefTime_[3] = maxTime + .08;
             navSolutionStarted_ = true;
         }
@@ -205,6 +206,7 @@ void SDGPSR::solve(void) {
         }
         //User cholesky decomposition solver to solve for the delta estimate
         Vector4d deltaEst = (hMatrix.transpose() * hMatrix).ldlt().solve(hMatrix.transpose() * residuals);
+        std::lock_guard<std::mutex> lock(userEstMutex_);
         userEstimateEcefTime_[0] += deltaEst[0];
         userEstimateEcefTime_[1] += deltaEst[1];
         userEstimateEcefTime_[2] += deltaEst[2];
@@ -223,9 +225,9 @@ void SDGPSR::signalProcessing() {
     for (unsigned i = 0; i < CORR_COUNT; ++i) {
         //Wait for available data
         while (1) {
-            ioMutex_.lock();
+            inputMutex_.lock();
             size_t inputSize = input_.size();
-            ioMutex_.unlock();
+            inputMutex_.unlock();
             if (inputSize)
                 break;
             if (!run_)
@@ -233,11 +235,11 @@ void SDGPSR::signalProcessing() {
             usleep(1e3);
         }
         //Once data is available, fft it and output it the search buffer
-        ioMutex_.lock();
+        inputMutex_.lock();
         searchData[i].resize(input_.front().size());
         fft_.forward(&input_.front()[0], &searchData[i][0]);
         input_.pop();
-        ioMutex_.unlock();
+        inputMutex_.unlock();
     }
 
     //Using the FFT'd data, search for all PRNs
@@ -249,6 +251,7 @@ void SDGPSR::signalProcessing() {
                 clockOffset_ + SEARCH_WINDOW_BANDWIDTH / 2.0,
                 SEARCH_WINDOW_STEP_SIZE);
         if (searchResult.found) {
+            std::lock_guard<std::mutex> lock(channelMutex_);
             channels_.emplace_back(new SignalTracker(fs_, prn, searchResult));
         }
     }
@@ -265,26 +268,29 @@ void SDGPSR::signalProcessing() {
     while (run_) {
         for (auto chanIterator = channels_.begin(); chanIterator != channels_.end();) {
             while (1) {
-                ioMutex_.lock();
+                inputMutex_.lock();
                 size_t inputSize = input_.size();
-                ioMutex_.unlock();
+                inputMutex_.unlock();
                 if (inputSize)
                     break;
                 if (!run_)
                     return;
                 usleep(1e3);
             }
-            std::lock_guard<std::mutex> lock(ioMutex_);
+            std::lock_guard<std::mutex> lock(inputMutex_);
             if ((*chanIterator)->processSamples(input_.front()) == lossOfLock) {
+                std::lock_guard<std::mutex> lock(channelMutex_);
                 chanIterator = channels_.erase(chanIterator);
             } else
                 ++chanIterator;
         }
-        ioMutex_.lock();
+        inputMutex_.lock();
         input_.pop();
-        ioMutex_.unlock();
-        if (navSolutionStarted_)
+        inputMutex_.unlock();
+        if (navSolutionStarted_){
+            std::lock_guard<std::mutex> lock(userEstMutex_);
             userEstimateEcefTime_[3] += CA_CODE_TIME;
+        }
         if (++trackingPacketCount % 100 == 0) {
             solve();
         }
@@ -292,7 +298,7 @@ void SDGPSR::signalProcessing() {
 }
 
 Vector3d SDGPSR::positionECEF(void){
-    std::lock_guard<std::mutex> lock(ioMutex_);
+    std::lock_guard<std::mutex> lock(userEstMutex_);
     return Vector3d(userEstimateEcefTime_.x(), userEstimateEcefTime_.y(), userEstimateEcefTime_.z());
 }
 
@@ -322,13 +328,13 @@ Vector3d SDGPSR::positionLLA(void){
 }
 
 double SDGPSR::timeOfWeek(void){
-    std::lock_guard<std::mutex> lock(ioMutex_);
+    std::lock_guard<std::mutex> lock(userEstMutex_);
     return userEstimateEcefTime_.w();
 }
 
 std::vector<std::pair<unsigned, State>> SDGPSR::trackingStatus(){
     std::vector<std::pair<unsigned, State>> status;
-    std::lock_guard<std::mutex> lock(ioMutex_);
+    std::lock_guard<std::mutex> lock(channelMutex_);
     for (auto &channel : channels_)
         status.emplace_back(channel->prn(), channel->state());
     return status;

@@ -96,6 +96,7 @@ private:
     std::list<fftwVector> trackingData_;
 
     LNAV_Data lnav_data_;
+    std::mutex lnavMutex_;
 
     CoherentCorrelator early_;
     CoherentCorrelator prompt_;
@@ -117,6 +118,8 @@ private:
     NavBitEdgeDetector navBitEdgeDetector_;
 
     SNR_Estimator snrEstimator_;
+    std::mutex snrMutex_;
+
     LockDetector carrierFllLock_;
     LockDetector carrierPllLock_;
     LowPassFilter carrierPhaseLPF_;
@@ -128,7 +131,7 @@ private:
 
     double fs_;
 
-    State state_;
+    atomic<State> state_;
 
 #ifdef DEBUG_FILES
     std::ofstream codeRecorder_;

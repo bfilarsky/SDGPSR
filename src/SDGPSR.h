@@ -80,20 +80,24 @@ private:
                         double freqStep);
 
     Vector4d userEstimateEcefTime_;
+    //Mutex should be locked any time a public function reads from userEstimateEcefTime_, and any time it is written to
+    std::mutex userEstMutex_;
 
     bool navSolutionStarted_;
 
     double fs_;
 
     std::queue<fftwVector> input_;
-
-    std::mutex ioMutex_;
+    //Mutex should be locked any time a public function reads from input_, and any time it is modified
+    std::mutex inputMutex_;
 
     FFT fft_;
 
     atomic_bool run_;
 
     std::list<std::unique_ptr<SignalTracker>> channels_;
+    //Mutex should be locked any time a public function reads from channels_, and any time it is modified
+    std::mutex channelMutex_;
 
     double clockOffset_;
 

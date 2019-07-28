@@ -47,6 +47,7 @@ State SignalTracker::state(void) {
 }
 
 double SignalTracker::CNoEst(void) {
+    std::lock_guard<std::mutex> lock(snrMutex_);
     return snrEstimator_.estimate() / (CA_CODE_TIME * integrationLength_);
 }
 
@@ -73,7 +74,9 @@ void SignalTracker::threadFunction(void) {
 
         carrierCorrelator_.integrate(trackingData, codeFreq_, codetime_, 1);
         std::complex<double> carrier = carrierCorrelator_.dump();
+        snrMutex_.lock();
         snrEstimator_.input(carrier);
+        snrMutex_.unlock();
 
         complex<double> carrierError = carrier / lastCarrier_;
         double carrierErrorPhase = arg(carrierError);
@@ -202,7 +205,9 @@ void SignalTracker::threadFunction(void) {
 
             if (integrationLength_ == 20) {
                 bool flipBits;
+                lnavMutex_.lock();
                 lnav_data_.navBit(2 * (fabs(arg(prompt)) < (M_PI / 2.0)) - 1, flipBits);
+                lnavMutex_.unlock();
                 if (flipBits)
                     carrierPhase_ += M_PI;
             }
@@ -219,7 +224,9 @@ unsigned SignalTracker::prn(void) {
 }
 
 double SignalTracker::transmitTime(void) {
+    lnavMutex_.lock();
     double navTime = lnav_data_.timeOfLastNavBit();
+    lnavMutex_.unlock();
     if (navTime == -1.0)
         return -1.0;
     return navTime + prompt_.integrationTime() + codetime_;
@@ -228,6 +235,7 @@ double SignalTracker::transmitTime(void) {
 Vector3d SignalTracker::satellitePosition(double timeOfWeek) {
     if (timeOfWeek == -1.0)
         return Vector3d(0.0, 0.0, 0.0);
+    std::lock_guard<std::mutex> lock(lnavMutex_);
     return lnav_data_.satellitePosition(timeOfWeek);
 }
 
