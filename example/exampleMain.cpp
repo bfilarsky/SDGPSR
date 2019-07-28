@@ -41,12 +41,12 @@ int main(){
 			}
 			else {
 				cout << "User Time of Week: " << sdgpsr.timeOfWeek() << endl;
-		    	cout << "User Latitude (deg): "<< std::setprecision(10) << sdgpsr.positionLLA().x() << endl;
+				cout << "User Latitude (deg): "<< std::setprecision(10) << sdgpsr.positionLLA().x() << endl;
 				cout << "User Longitude (deg): "<< std::setprecision(10) << sdgpsr.positionLLA().y() << endl;
 				cout << "User Altitude (m): " << std::setprecision(10) << sdgpsr.positionLLA().z() << endl;
 				cout << endl;
 			}
-		    usleep(1e6);
+			usleep(1e6);
 		}
 
 	}
