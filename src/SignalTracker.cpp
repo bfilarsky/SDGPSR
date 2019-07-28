@@ -1,20 +1,23 @@
 #include "SignalTracker.h"
 #include <unistd.h>
 
-const double CARRIER_CODE_SF = 1.023 / 1575.42;
-const double LPF_FCUTOFF     = .0039805;
+const double CARRIER_CODE_SF  = 1.023 / 1575.42;
+const double LPF_FCUTOFF      = .0039805;
+const double FLL_GAIN_PULLIN  = .01;
+const double FLL_GAIN_LOCKED  = .001;
+const double COSTAS_LOOP_GAIN = 0.2;
 
 SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult) :
-                                     runThread_(true),
-                                     synced_(false),
-                                     early_(fs, prn),
-                                     prompt_(fs, prn),
-                                     late_(fs, prn),
-                                     carrierCorrelator_(fs, prn),
-                                     navBitEdgeDetector_(5),
-                                     carrierPhaseLPF_(LPF_FCUTOFF),
-                                     carrierFreqLPF_(LPF_FCUTOFF),
-                                     processingThread_(&SignalTracker::threadFunction, this) {
+                                             runThread_(true),
+                                             synced_(false),
+                                             early_(fs, prn),
+                                             prompt_(fs, prn),
+                                             late_(fs, prn),
+                                             carrierCorrelator_(fs, prn),
+                                             navBitEdgeDetector_(5),
+                                             carrierPhaseLPF_(LPF_FCUTOFF),
+                                             carrierFreqLPF_(LPF_FCUTOFF),
+                                             processingThread_(&SignalTracker::threadFunction, this) {
     prn_ = prn;
     fs_ = fs;
 
@@ -124,24 +127,28 @@ void SignalTracker::threadFunction(void) {
         double costasLoopErrorPhase = arg(costasLoopError);
         double costasLoopFreqError = costasLoopErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
 
-        if (state_ >= closingCarrierPLL)
-            carrierPllLock_.error(costasLoopError);
-
-        double costasLoopPhaseCorrection = state_ == closingCarrierFLL ? 0.0 : -costasLoopErrorPhase / 5.0;
-        double fllFreqError = state_ == closingCarrierFLL ? carrierErrorFreqHz : costasLoopFreqError;
-        double fllGain = state_ == closingCarrierFLL ? .01 : .001;
-
         lastCarrier_ = carrier;
         carrierFllLock_.error(carrierRotation);
         carrierPhaseLPF_.iterate(costasLoopErrorPhase);
-        carrierFreqLPF_.iterate(fllFreqError);
 
-        carrierFreq_ += fllGain * fllFreqError;
-        carrierPhase_ += costasLoopPhaseCorrection;
-        //Aid code tracking
-        codeFreq_ -= fllGain * fllFreqError * CARRIER_CODE_SF;
-        codetime_ -= costasLoopPhaseCorrection / (2.0 * M_PI * 1.57542e9) * CARRIER_CODE_SF;
-        lastCarrier_ *= complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
+        if (state_ == closingCarrierFLL){
+            //Aid code tracking
+            carrierFreqLPF_.iterate(carrierErrorFreqHz);
+            carrierFreq_ += FLL_GAIN_PULLIN * carrierErrorFreqHz;
+            codeFreq_    -= FLL_GAIN_PULLIN * carrierErrorFreqHz * CARRIER_CODE_SF;
+        }
+        else {
+            carrierPllLock_.error(costasLoopError);
+            double costasLoopPhaseCorrection = -costasLoopErrorPhase * COSTAS_LOOP_GAIN;
+            carrierPhase_ += costasLoopPhaseCorrection;
+            codetime_ -= costasLoopPhaseCorrection / (2.0 * M_PI * 1.57542e9) * CARRIER_CODE_SF;
+            lastCarrier_ *= complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
+
+            //Aid code tracking
+            carrierFreqLPF_.iterate(costasLoopFreqError);
+            carrierFreq_ += FLL_GAIN_LOCKED * costasLoopFreqError;
+            codeFreq_    -= FLL_GAIN_LOCKED * costasLoopFreqError * CARRIER_CODE_SF;
+        }
 
 #ifdef DEBUG_FILES
         double state = state_;
@@ -152,7 +159,7 @@ void SignalTracker::threadFunction(void) {
         carrierRecorder_.write((char*) &carrierRotation, sizeof(carrier));
         carrierRecorder_.write((char*) &costasLoopErrorPhase, sizeof(costasLoopErrorPhase));
         carrierRecorder_.write((char*) &meanCarrierPhaseErr, sizeof(meanCarrierPhaseErr));
-        carrierRecorder_.write((char*) &fllFreqError, sizeof(fllFreqError));
+        carrierRecorder_.write((char*) &carrierErrorFreqHz, sizeof(carrierErrorFreqHz));
         carrierRecorder_.write((char*) &meanCarrierFreqErr, sizeof(meanCarrierFreqErr));
         carrierRecorder_.write((char*) &carrierFreq_, sizeof(carrierFreq_));
         carrierRecorder_.write((char*) &CN0, sizeof(CN0));

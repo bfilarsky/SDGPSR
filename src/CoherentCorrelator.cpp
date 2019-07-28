@@ -10,8 +10,7 @@ CoherentCorrelator::~CoherentCorrelator() {
 
 }
 
-double CoherentCorrelator::integrate(fftwVector &data, double codeFreqOffset, double timeOffset,
-        unsigned integrationCount, bool *ready) {
+double CoherentCorrelator::integrate(fftwVector &data, double codeFreqOffset, double timeOffset, unsigned integrationCount, bool *ready) {
     timeOffset += 1e-3;
 
     for (unsigned i = 0; i < data.size(); ++i) {
