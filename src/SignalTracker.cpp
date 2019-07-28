@@ -5,6 +5,8 @@ const double CARRIER_CODE_SF  = 1.023 / 1575.42;
 const double LPF_FCUTOFF      = .0039805;
 const double FLL_GAIN_PULLIN  = .01;
 const double FLL_GAIN_LOCKED  = .001;
+const double CODE_PLL_P_GAIN  = .04;
+const double CODE_PLL_I_GAIN  = .002;
 const double COSTAS_LOOP_GAIN = 0.2;
 
 SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult) :
@@ -135,20 +137,21 @@ void SignalTracker::threadFunction(void) {
             //Aid code tracking
             carrierFreqLPF_.iterate(carrierErrorFreqHz);
             carrierFreq_ += FLL_GAIN_PULLIN * carrierErrorFreqHz;
-            codeFreq_    -= FLL_GAIN_PULLIN * carrierErrorFreqHz * CARRIER_CODE_SF;
+            codeFreq_    += FLL_GAIN_PULLIN * carrierErrorFreqHz * CARRIER_CODE_SF;
         }
         else {
             carrierPllLock_.error(costasLoopError);
             double costasLoopPhaseCorrection = -costasLoopErrorPhase * COSTAS_LOOP_GAIN;
             carrierPhase_ += costasLoopPhaseCorrection;
-            codetime_ -= costasLoopPhaseCorrection / (2.0 * M_PI * 1.57542e9) * CARRIER_CODE_SF;
-            lastCarrier_ *= complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
+            codetime_     += costasLoopPhaseCorrection / (2.0 * M_PI * 1.57542e9) * CARRIER_CODE_SF;
+            lastCarrier_  *= complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
 
             //Aid code tracking
             carrierFreqLPF_.iterate(costasLoopFreqError);
             carrierFreq_ += FLL_GAIN_LOCKED * costasLoopFreqError;
-            codeFreq_    -= FLL_GAIN_LOCKED * costasLoopFreqError * CARRIER_CODE_SF;
+            codeFreq_    += FLL_GAIN_LOCKED * costasLoopFreqError * CARRIER_CODE_SF;
         }
+        codetime_ += codeFreq_ * CA_CODE_TIME * CHIP_TIME;
 
 #ifdef DEBUG_FILES
         double state = state_;
@@ -190,12 +193,12 @@ void SignalTracker::threadFunction(void) {
             double magEarly = abs(early);
             double magPrompt = abs(prompt);
             double magLate = abs(late);
-            double codeErrorChips = (magEarly - magLate) / (2.0 * (magEarly + magLate));
+            double codeErrorChips = (magLate - magEarly) / (2.0 * (magEarly + magLate));
             double codeErrorTime = codeErrorChips / CHIP_RATE;
             codeLock_.error(magEarly, magPrompt, magLate);
 
-            codetime_ -= 0.04 * codeErrorTime;
-            codeFreq_ -= 0.04 * codeErrorChips;
+            codetime_ += CODE_PLL_P_GAIN * codeErrorTime;
+            codeFreq_ += CODE_PLL_I_GAIN * codeErrorChips * integrationLength_;
 
 #ifdef DEBUG_FILES
             double lpEarly = codeLock_.early();
@@ -222,7 +225,6 @@ void SignalTracker::threadFunction(void) {
             }
         }
 
-        codetime_ += codeFreq_ * CA_CODE_TIME * CHIP_TIME;
         timeSinceStart_ += trackingData.size() / fs_;
         ++processedPackets_;
     }
