@@ -77,23 +77,6 @@ void SignalTracker::threadFunction(void) {
         snrEstimator_.input(carrier);
         snrMutex_.unlock();
 
-        complex<double> carrierError = carrier / lastCarrier_;
-        double carrierErrorPhase = arg(carrierError);
-        double carrierErrorFreqHz = carrierErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
-
-        complex<double> costasLoopError = carrier.real() > 0.0 ? carrier : carrier * complex<double>(-1.0, 0.0);
-        double costasLoopErrorPhase = arg(costasLoopError);
-        double costasLoopFreqError = costasLoopErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
-
-        double costasLoopPhaseCorrection = state_ == closingCarrierFLL ? 0.0 : -costasLoopErrorPhase / 5.0;
-        double fllFreqError = state_ == closingCarrierFLL ? carrierErrorFreqHz : costasLoopFreqError;
-        double fllGain = state_ == closingCarrierFLL ? .01 : .001;
-
-        lastCarrier_ = carrier;
-        carrierFllLock_.error(carrierError);
-        carrierPhaseLPF_.iterate(costasLoopErrorPhase);
-        carrierFreqLPF_.iterate(fllFreqError);
-
         switch (state_) {
             case lossOfLock:
                 break;
@@ -105,17 +88,18 @@ void SignalTracker::threadFunction(void) {
                 break;
             case closingCarrierPLL:
                 integrationLength_ = 1;
-                carrierPllLock_.error(costasLoopError);
                 if (!carrierFllLock_.optimisticLock())
                     state_ = closingCarrierFLL;
                 if (carrierPllLock_.pessimisticLock())
                     state_ = findingNavBitEdge;
                 break;
             case findingNavBitEdge:
-                carrierPllLock_.error(costasLoopError);
                 if (!carrierPllLock_.optimisticLock())
                     state_ = closingCarrierPLL;
-                if (fabs(carrierErrorPhase) > 0.5 * M_PI) {
+                //Since the PLL is locked, most of the energy should be in the in-phase
+                //If a 180* flip has happened from a nav bit, carrier.real and lastCarrier_.real
+                //will have opposite signs
+                if (carrier.real() * lastCarrier_.real() < 0.0) {
                     if (navBitEdgeDetector_.push_back(processedPackets_)) {
                         integrationLength_ = 20;
                         state_ = fullTrack;
@@ -133,6 +117,25 @@ void SignalTracker::threadFunction(void) {
                 break;
         }
 
+        complex<double> carrierRotation = carrier / lastCarrier_;
+        double carrierErrorFreqHz = arg(carrierRotation) / (CA_CODE_TIME * 2.0 * M_PI);
+
+        complex<double> costasLoopError = carrier.real() > 0.0 ? carrier : carrier * complex<double>(-1.0, 0.0);
+        double costasLoopErrorPhase = arg(costasLoopError);
+        double costasLoopFreqError = costasLoopErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
+
+        if (state_ >= closingCarrierPLL)
+            carrierPllLock_.error(costasLoopError);
+
+        double costasLoopPhaseCorrection = state_ == closingCarrierFLL ? 0.0 : -costasLoopErrorPhase / 5.0;
+        double fllFreqError = state_ == closingCarrierFLL ? carrierErrorFreqHz : costasLoopFreqError;
+        double fllGain = state_ == closingCarrierFLL ? .01 : .001;
+
+        lastCarrier_ = carrier;
+        carrierFllLock_.error(carrierRotation);
+        carrierPhaseLPF_.iterate(costasLoopErrorPhase);
+        carrierFreqLPF_.iterate(fllFreqError);
+
         carrierFreq_ += fllGain * fllFreqError;
         carrierPhase_ += costasLoopPhaseCorrection;
         //Aid code tracking
@@ -146,7 +149,7 @@ void SignalTracker::threadFunction(void) {
         double meanCarrierFreqErr = carrierFreqLPF_.last();
         double CN0 = snrEstimator_.estimate() / (CA_CODE_TIME);
         carrierRecorder_.write((char*) &timeSinceStart_, sizeof(timeSinceStart_));
-        carrierRecorder_.write((char*) &carrierError, sizeof(carrier));
+        carrierRecorder_.write((char*) &carrierRotation, sizeof(carrier));
         carrierRecorder_.write((char*) &costasLoopErrorPhase, sizeof(costasLoopErrorPhase));
         carrierRecorder_.write((char*) &meanCarrierPhaseErr, sizeof(meanCarrierPhaseErr));
         carrierRecorder_.write((char*) &fllFreqError, sizeof(fllFreqError));
@@ -202,7 +205,7 @@ void SignalTracker::threadFunction(void) {
             codeRecorder_.write((char*) &lpLate, sizeof(lpLate));
 #endif
 
-            if (integrationLength_ == 20) {
+            if (state_ >= fullTrack) {
                 bool flipBits;
                 lnavMutex_.lock();
                 lnav_data_.navBit(2 * (fabs(arg(prompt)) < (M_PI / 2.0)) - 1, flipBits);
