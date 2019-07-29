@@ -88,7 +88,7 @@ void OrbitalData::process(const LNAV_Word &word) {
 
 //Clock data is all on subframe 1, we can just update all clock info when we get this
 //See Figure 20-1 (sheet 1 of 11), and Table 20-I in IS-GPS-200J
-void OrbitalData::processSubframe1(const vector<LNAV_Word> &words) {
+void OrbitalData::processSubframe1(const std::vector<LNAV_Word> &words) {
     clockData_.weekNumber_ = words[2].getUnsignedValue(1, 10);
     clockData_.IODC_       = words[2].getUnsignedValue(23, 2) << 8 | words[6].getUnsignedValue(1, 8);
     clockData_.Tgd_        = words[6].getSignedValue(17, 8) * pow(2, -31.0);
@@ -103,7 +103,7 @@ void OrbitalData::processSubframe1(const vector<LNAV_Word> &words) {
 //don't update current Ephemeris data until we have everything. We do not want to attempt orbital calculations
 //with half our data from one data set (and therefor Time of Validity), and half from another
 //See Figure 20-1 (sheet 2 of 11), Table 20-II, and Table 20-III in IS-GPS-200J
-void OrbitalData::processSubframe2(const vector<LNAV_Word> &words) {
+void OrbitalData::processSubframe2(const std::vector<LNAV_Word> &words) {
     nextEphemeris_.IODE_              = words[2].getUnsignedValue(1, 8);
     nextEphemeris_.Crs_               = words[2].getSignedValue(9, 16) * pow(2.0, -5.0);
     nextEphemeris_.meanAnomaly_       = ((words[3].getSignedValue(17, 8) << 24) | (0xffffff & words[4].getSignedValue(1, 24))) * pow(2.0,-31.0) * SEMI_CIRCLE_TO_RAD; /**/
@@ -120,7 +120,7 @@ void OrbitalData::processSubframe2(const vector<LNAV_Word> &words) {
 //This should finish out orbital data we need. Once we have it all, if the IODE in this SF matches the IODE we set in SF2,
 //and it is more recent than the current data, update the current data with the new data
 //See Figure 20-1 (sheet 3 of 11), Table 20-II, and Table 20-III in IS-GPS-200J
-void OrbitalData::processSubframe3(const vector<LNAV_Word> &words) {
+void OrbitalData::processSubframe3(const std::vector<LNAV_Word> &words) {
     nextEphemeris_.Cic_              = words[2].getSignedValue(1, 16) * pow(2.0, -29.0);
     nextEphemeris_.rightAscension_   = ((words[2].getSignedValue(17, 8) << 24) | (0xffffff & words[3].getSignedValue(1, 24))) * pow(2.0,-31.0) * SEMI_CIRCLE_TO_RAD;
     nextEphemeris_.Cis_              = words[4].getSignedValue(1, 16) * pow(2.0, -29.0);

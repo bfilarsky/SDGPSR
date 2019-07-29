@@ -1,4 +1,5 @@
 #include "CaCode.h"
+#include <stdexcept>
 
 CaCode::CaCode(unsigned prn) {
     if (prn == 0 || prn > PRN_COUNT)

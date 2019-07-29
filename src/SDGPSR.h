@@ -1,17 +1,7 @@
 #ifndef SRC_SDGPSR_H_
 #define SRC_SDGPSR_H_
 
-#include <stdint.h>
-#include <iostream>
-#include <fstream>
-#include <complex>
 #include <queue>
-#include <vector>
-#include <cstring>
-#include <thread>
-#include <fftw3.h>
-#include <list>
-#include <memory>
 #include <unordered_map>
 #include <eigen3/Eigen/Dense>
 #include <atomic>
@@ -59,8 +49,10 @@ public:
     //Get user GPS time of week (s)
     double timeOfWeek(void);
 
-    std::vector<std::pair<unsigned, State>> trackingStatus();
+	//Get the state of all tracked satellites. Pair is PRN/State
+    std::vector<std::pair<unsigned, State>> trackingStatus(void);
 
+	//Flag to indicate the nav solution has started
     bool navSolution(void);
 
 private:
@@ -103,9 +95,9 @@ private:
 
     FFT fft_;
 
-    atomic_bool run_;
+    std::atomic_bool run_;
 
-    atomic_bool synced_;
+    std::atomic_bool synced_;
 
     std::list<std::unique_ptr<SignalTracker>> channels_;
     //Mutex should be locked any time a public function reads from channels_, and any time it is modified
@@ -116,8 +108,8 @@ private:
     std::thread signalProcessor_;
 
 #ifdef DEBUG_FILES
-    ofstream userEstimates_;
-    std::unordered_map<unsigned,ofstream> residualsOutput_;
+    std::ofstream userEstimates_;
+    std::unordered_map<unsigned,std::ofstream> residualsOutput_;
 #endif
 };
 

@@ -6,7 +6,6 @@
 #include "LNAV_Word.h"
 
 using Eigen::Vector3d;
-using namespace std;
 
 const double MU = 3.986005e14;
 const double OMEGA_EARTH = 7.2921151467e-5;
@@ -117,14 +116,14 @@ public:
     bool valid(void) const;
 
 private:
-    void processSubframe1(const vector<LNAV_Word> &words);
+    void processSubframe1(const std::vector<LNAV_Word> &words);
 
-    void processSubframe2(const vector<LNAV_Word> &words);
+    void processSubframe2(const std::vector<LNAV_Word> &words);
 
-    void processSubframe3(const vector<LNAV_Word> &words);
+    void processSubframe3(const std::vector<LNAV_Word> &words);
 
     //Build up the words until a full subframe has been downloaded
-    vector<LNAV_Word> words_;
+    std::vector<LNAV_Word> words_;
 
     //Time of week of most recent subframe (even the skipped ones)
     int currentTow_;

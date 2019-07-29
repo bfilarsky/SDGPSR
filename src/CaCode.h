@@ -6,7 +6,6 @@
  * It can then be indexed using the [] operator, and returns the code as +1/-1
  */
 
-#include <iostream>
 #include <vector>
 
 const double CHIP_RATE = 1.023e6;

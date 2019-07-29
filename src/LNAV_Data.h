@@ -1,11 +1,8 @@
 #ifndef SRC_LNAV_DATA_H_
 #define SRC_LNAV_DATA_H_
 
-#include <fstream>
-#include <iostream>
-#include <iomanip>
 #include <deque>
-#include <vector>
+#include <eigen3/Eigen/Dense>
 #include "OrbitalData.h"
 
 /*

@@ -3,7 +3,7 @@
 
 //The preamble on Word 1 of every subframe. The TLM word is detected by finding this sequence, then verifying the checksum
 //on the candidate word
-const array<int, 8> TLM_PREAMBLE = { 1, -1, -1, -1, 1, -1, 1, 1 };
+const std::array<int, 8> TLM_PREAMBLE = { 1, -1, -1, -1, 1, -1, 1, 1 };
 
 LNAV_Data::LNAV_Data() {
     trackingSubFrame_ = false;

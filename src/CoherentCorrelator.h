@@ -2,7 +2,6 @@
 #define SRC_COHERENTCORRELATOR_H_
 
 #include <complex>
-#include <fstream>
 #include "FFT.h"
 #include "CaCode.h"
 

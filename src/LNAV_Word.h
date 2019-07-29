@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <deque>
-#include <iostream>
 
 const unsigned WORD_SIZE = 30;
 const unsigned SRC_BITS = 24;

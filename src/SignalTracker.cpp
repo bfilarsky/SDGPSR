@@ -33,7 +33,7 @@ SignalTracker::SignalTracker(double fs, unsigned prn, SearchResult searchResult)
     codeFreq_ = (searchResult.baseBandFreq) * CARRIER_CODE_SF;
     integrationLength_ = 1;
 
-    lastCarrier_ = complex<double>(1.0, 0.0);
+    lastCarrier_ = std::complex<double>(1.0, 0.0);
 
     state_ = closingCarrierFLL;
 
@@ -123,10 +123,10 @@ void SignalTracker::threadFunction(void) {
                 break;
         }
 
-        complex<double> carrierRotation = carrier / lastCarrier_;
+        std::complex<double> carrierRotation = carrier / lastCarrier_;
         double carrierErrorFreqHz = arg(carrierRotation) / (CA_CODE_TIME * 2.0 * M_PI);
 
-        complex<double> costasLoopError = carrier.real() > 0.0 ? carrier : carrier * complex<double>(-1.0, 0.0);
+        std::complex<double> costasLoopError = carrier.real() > 0.0 ? carrier : carrier * std::complex<double>(-1.0, 0.0);
         double costasLoopErrorPhase = arg(costasLoopError);
         double costasLoopFreqError = costasLoopErrorPhase / (CA_CODE_TIME * 2.0 * M_PI);
 
@@ -145,7 +145,7 @@ void SignalTracker::threadFunction(void) {
             double costasLoopPhaseCorrection = -costasLoopErrorPhase * COSTAS_LOOP_GAIN;
             carrierPhase_ += costasLoopPhaseCorrection;
             codetime_     += costasLoopPhaseCorrection / (2.0 * M_PI * 1.57542e9) * CARRIER_CODE_SF;
-            lastCarrier_  *= complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
+            lastCarrier_  *= std::complex<double>(cos(costasLoopPhaseCorrection), sin(costasLoopPhaseCorrection));
 
             //Aid code tracking
             carrierFreqLPF_.iterate(costasLoopFreqError);

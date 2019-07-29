@@ -1,4 +1,5 @@
 #include "LNAV_Word.h"
+#include <stdexcept>
 
 LNAV_Word::LNAV_Word(const std::deque<int> &word, unsigned lastWordBit29, unsigned lastWordBit30) {
     word_.resize(WORD_SIZE);

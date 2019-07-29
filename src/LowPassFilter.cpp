@@ -1,7 +1,6 @@
 #include "LowPassFilter.h"
 #include <cmath>
 #include <stdexcept>
-#include <iostream>
 
 LowPassFilter::LowPassFilter(double fCutoff) {
     if (fCutoff <= 0.0 || fCutoff > 0.5)

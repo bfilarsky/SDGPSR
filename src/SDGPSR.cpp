@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <chrono>
 #include <thread>
+#include <iostream>
 
 const double SEARCH_WINDOW_BANDWIDTH = 10e3;
 const double SEARCH_WINDOW_STEP_SIZE = 500.0;
@@ -146,7 +147,7 @@ SearchResult SDGPSR::search(std::vector<fftwVector> &searchData,
  * tracking channels have a full nav solution for the satellite (time, clock data, and ephemeris data)
  */
 void SDGPSR::solve(void) {
-    vector<pair<unsigned,Vector4d>> satPosAndTime;
+    std::vector<std::pair<unsigned,Vector4d>> satPosAndTime;
     double maxTime = 0.0;
     for (auto &chan : channels_) {
         chan->sync();
@@ -226,7 +227,7 @@ void SDGPSR::solve(void) {
 
 void SDGPSR::threadFunction() {
     //FFT the first CORR_COUNT packets in order to conduct search
-    const unsigned CORR_COUNT = 128;
+    const unsigned CORR_COUNT = 64;
     std::vector<fftwVector> searchData(CORR_COUNT);
     for (unsigned i = 0; i < CORR_COUNT; ++i) {
         //Wait for available data
@@ -267,7 +268,7 @@ void SDGPSR::threadFunction() {
     //Ensure the minimum number of required satellites have been found
     const unsigned MIN_SATELLITES = 4;
     if (channels_.size() < MIN_SATELLITES) {
-        cout << channels_.size() << " satellites found. Minimum " << MIN_SATELLITES << " required" << endl;
+        std::cout << channels_.size() << " satellites found. Minimum " << MIN_SATELLITES << " required" << std::endl;
         exit(1);
     }
 

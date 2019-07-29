@@ -2,8 +2,6 @@
 #define SRC_SIGNAL_TRACKER_H_
 
 #include <fstream>
-#include <iostream>
-#include <iomanip>
 #include <complex>
 #include <thread>
 #include <mutex>
@@ -87,9 +85,9 @@ private:
 
     void threadFunction(void);
 
-    atomic_bool runThread_;
+    std::atomic_bool runThread_;
 
-    atomic_bool synced_;
+    std::atomic_bool synced_;
 
     std::mutex trackingDataAccess_;
 
@@ -103,7 +101,7 @@ private:
     CoherentCorrelator late_;
 
     CoherentCorrelator carrierCorrelator_;
-    complex<double> lastCarrier_;
+    std::complex<double> lastCarrier_;
 
     double timeSinceStart_;
     size_t processedPackets_;
@@ -131,7 +129,7 @@ private:
 
     double fs_;
 
-    atomic<State> state_;
+    std::atomic<State> state_;
 
 #ifdef DEBUG_FILES
     std::ofstream codeRecorder_;
