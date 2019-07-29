@@ -1,6 +1,7 @@
 #include "SDGPSR.h"
 #include <iomanip>
-#include <unistd.h>
+#include <chrono>
+#include <thread>
 
 const double SEARCH_WINDOW_BANDWIDTH = 10e3;
 const double SEARCH_WINDOW_STEP_SIZE = 500.0;
@@ -238,7 +239,7 @@ void SDGPSR::threadFunction() {
             if (!run_)
                 return;
             synced_ = true;
-            usleep(1e3);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         synced_ = false;
         //Once data is available, fft it and output it the search buffer
@@ -283,7 +284,7 @@ void SDGPSR::threadFunction() {
                 if (!run_)
                     return;
                 synced_ = true;
-                usleep(1e3);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             synced_ = false;
             inputMutex_.lock();

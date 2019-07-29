@@ -1,5 +1,6 @@
 #include "SignalTracker.h"
-#include <unistd.h>
+#include <chrono>
+#include <thread>
 
 const double CARRIER_CODE_SF  = 1.023 / 1575.42;
 const double LPF_FCUTOFF      = .0039805;
@@ -70,7 +71,7 @@ void SignalTracker::threadFunction(void) {
             trackingDataAccess_.unlock();
         } else {
             synced_ = true;
-            usleep(1e3);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
 
@@ -263,7 +264,7 @@ void SignalTracker::sync(void) {
         size_t dataSize = trackingData_.size();
         trackingDataAccess_.unlock();
         if (!synced_ || dataSize)
-            usleep(1e3);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         else
             return;
     }

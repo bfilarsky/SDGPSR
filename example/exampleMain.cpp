@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
-#include <unistd.h>
+#include <chrono>
+#include <thread>
 #include "src/SDGPSR.h"
 
 using std::cout;
@@ -46,7 +47,7 @@ int main(){
 				cout << "User Altitude (m): " << std::setprecision(10) << sdgpsr.positionLLA().z() << endl;
 				cout << endl;
 			}
-			usleep(1e6);
+			std::this_thread::sleep_for(std::chrono::seconds(1));
 		}
 
 	}
